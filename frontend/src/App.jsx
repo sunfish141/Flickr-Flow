@@ -100,7 +100,7 @@ export default function App() {
             }}><option value="">Existing 1 km model</option>{config.local_spread.expanding && <option value="auto">Expanding landscape · U.S./Canada</option>}{(mode === 'place' ? config.local_spread.regions : []).map(r => <option key={r.id} value={r.id}>{r.label} · local landscape scenario</option>)}</select></label>
             {sim.localRegion && <p className="hint">Experimental {config.local_spread.mesh_m} m fuel patches with road barriers. Uncalibrated travel rates and constant scenario wind; urban mixtures and structures are unsupported. Unknown road widths use a {config.local_spread.policy.unknown_road_width_m} m assumption where surface type is mapped. {sim.localRegion === 'auto' ? 'Roads are read from a local archive. Landscape tiles are built as the fire spreads; first preparation may take several minutes.' : 'Place within the selected region.'}</p>}
           </div>}
-        {config?.local_spread?.expanding_error && <p className="hint">{config.local_spread.expanding_error}</p>}
+        {config?.local_spread?.expanding_error && <p className="hint">Expanding fuel and road simulation is unavailable on this server.</p>}
         <section id="place-panel" hidden={mode !== 'place'} aria-label="Place starting fires">
           <div className="label-row"><label htmlFor="intensity">Starting intensity</label><output id="intensity-value" htmlFor="intensity">{intensity}%</output></div>
           <input id="intensity" type="range" min="0" max="100" step="5" value={intensity} disabled={!!sim.localRegion} aria-valuetext={`${intensity} percent`} onChange={e => setIntensity(Number(e.target.value))} />

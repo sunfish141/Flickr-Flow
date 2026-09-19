@@ -9,7 +9,8 @@ Runtime readers live in `providers/`; bulk collection commands are excluded.
 The runtime separates API routes, resource lifecycle, and portable
 settings. Existing model and state contracts remain supported. The frontend
 retains the map, placement, FIRMS, historical comparison, inspection, detailed
-landscapes, and timeline controls while its internals are rebuilt incrementally.
+landscapes, and timeline controls. Timeline transitions and request cancellation
+are separate tested modules; all three reconstruction milestones are implemented.
 
 ## Run
 
@@ -93,11 +94,17 @@ ignored by Git; reproduce the run or transfer trusted artifacts separately.
 ```bash
 PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
   python -m unittest discover -s tests -v
+node --test frontend/tests/*.test.js
 ```
 
 Tests include the reference behavior contracts for grid identity, finite-fuel
 spread, local road barriers, HTTP validation, live observations, and historical
 comparison. Runtime preparation uses a single worker and bounded shared caches.
+The verified checkpoint passes 74 Python tests, 11 frontend tests, and production
+Chromium checks for playback races, historical replay, 128-frame history,
+2,000-cell displays, keyboard focus and mobile layout. See
+[verification instructions and fixture boundaries](docs/verification.md) to
+repeat the browser checks.
 
 This is a research preview. The coarse map transition uses no weather; local
 fuel/road travel is an uncalibrated scenario. The offline weather classifier

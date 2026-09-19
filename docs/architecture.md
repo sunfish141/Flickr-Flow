@@ -27,3 +27,16 @@ run manifests remain supported through explicit settings.
 The browser owns completed frames and playback timing. Request bodies contain
 the full versioned model state. The API does not maintain per-user sessions or
 silently truncate source data to fit display limits.
+
+`frontend/src/scenarioState.js` defines immutable timeline transitions. It keeps
+128 complete frames, seeks by absolute model step (including historical two-step
+days), and replays stored future frames before requesting new predictions.
+Trimming display history preserves fuel and burned-cell state in retained frames.
+
+`requestCoordinator.js` permits one scenario request at a time. Each request has
+an AbortController and a unique ticket. Cancellation retires the ticket before
+aborting; a late response, failure or cleanup cannot affect a replacement request.
+`useScenario.js` connects this lifecycle to React, source selection and playback
+timers. Pause, reset, seeking, source changes and tab hiding cancel pending work.
+Hiding also cancels explicit seed/FIRMS loads and clears their loading indicator;
+completed server preparation may remain cached for a later retry.

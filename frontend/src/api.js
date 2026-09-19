@@ -6,7 +6,10 @@ export async function api(path, body, signal) {
   });
   let data;
   try { data = await response.json(); }
-  catch { throw new Error('The server returned an unreadable response. Try again.'); }
+  catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new Error('The server returned an unreadable response. Try again.');
+  }
   if (!response.ok) {
     const detail = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('; ') : data.detail;
     const error = new Error(typeof detail === 'string' ? detail : 'The request failed. Try again.');
