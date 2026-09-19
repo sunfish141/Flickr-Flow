@@ -6,7 +6,8 @@ unsupported fuel, not evidence of zero fire risk. Roads split mesh elements.
 """
 
 from dataclasses import dataclass, asdict
-from functools import cached_property, lru_cache
+from collections import OrderedDict
+from functools import cached_property
 import hashlib
 import heapq
 import json
@@ -21,7 +22,7 @@ from shapely.strtree import STRtree
 from wildfire_data.core.grid import GridCell, cell_from_id
 from wildfire_data.model.features.fuel_barrier_features import polygons, projected_wind
 
-LOCAL_VERSION = 'local-fuel-patch-travel/v4'
+LOCAL_VERSION = 'local-fuel-patch-travel/v5'
 VEGETATED = ('needleleaf', 'broadleaf', 'mixed_forest', 'shrubland', 'grassland',
              'other_vegetation', 'wetland', 'cropland')
 
@@ -151,7 +152,10 @@ class LocalSpreadModel:
         sampler, policy = self.sampler, self.policy
         lon, lat = sampler.to_geo.transform(*sampler.bounds.centroid.coords[0])
         self.wind = projected_wind(sampler.to_grid, (lat, lon), policy.wind_east_m_s, policy.wind_north_m_s)
-        self.arrivals = lru_cache(maxsize=8)(self._arrivals)
+        self.arrival_searches = OrderedDict()
+
+    def clear_arrivals(self):
+        self.arrival_searches.clear()
 
     def _connect(self, pairs):
         """Vectorized shared gates; identical road/hole/corner rules to scalar construction."""
@@ -259,15 +263,30 @@ class LocalSpreadModel:
         dx, dy = b.x-a.x, b.y-a.y
         return (self.wind[0]*dx+self.wind[1]*dy)/max(math.hypot(dx, dy), 1e-9)
 
-    def _arrivals(self, seeds):
+    def arrivals(self, seeds, until=math.inf):
+        """Resume Dijkstra only as far as requested; retain pending future gates.
+
+        Times beyond `until` may still improve. Times at or before it are final,
+        so earlier frames can be replayed after advancing without another search.
+        The default completes the finite, currently loaded graph for diagnostics.
+        """
         if not seeds or any(type(i) is not int or not 0 <= i < len(self.patches) for i in seeds):
             raise ValueError('Invalid local ignition identifiers')
-        times = {i: 0. for i in seeds}
-        queue = [(0., i) for i in seeds]
-        heapq.heapify(queue)
-        while queue:
+        if math.isnan(until) or until < 0:
+            raise ValueError('Arrival horizon must be nonnegative')
+        seeds = tuple(sorted(set(seeds)))
+        if seeds not in self.arrival_searches:
+            times = {i: 0. for i in seeds}
+            queue = [(0., i) for i in seeds]
+            heapq.heapify(queue)
+            self.arrival_searches[seeds] = (times, queue)
+            if len(self.arrival_searches) > 8:
+                self.arrival_searches.popitem(last=False)
+        self.arrival_searches.move_to_end(seeds)
+        times, queue = self.arrival_searches[seeds]
+        while queue and queue[0][0] <= until:
             time, i = heapq.heappop(queue)
-            if time != times[i] or time > 96*60:
+            if time != times[i]:
                 continue
             edges = [(j, first, second, False) for j, first, second in self.adjacency[i]]
             if self.policy.max_spotting_distance_m and self.policy.spotting_distance_per_wind_m_s:
@@ -298,15 +317,15 @@ class LocalSpreadModel:
                         continue
                     delay = departure + second/(target_rate*response)
                 arrival = time + delay
-                if arrival <= 96*60 and arrival < times.get(j, math.inf):
+                if arrival < times.get(j, math.inf):
                     times[j] = arrival
                     heapq.heappush(queue, (arrival, j))
         return times
 
     def frame(self, seeds, elapsed_minutes):
-        if not math.isfinite(elapsed_minutes) or not 0 <= elapsed_minutes <= 96*60:
-            raise ValueError('Local playback supports 0–96 hours')
-        times = self.arrivals(tuple(sorted(set(seeds))))
+        if not math.isfinite(elapsed_minutes) or elapsed_minutes < 0:
+            raise ValueError('Local playback time must be finite and nonnegative')
+        times = self.arrivals(tuple(sorted(set(seeds))), until=elapsed_minutes)
         active, burned, cells = [], [], {}
         boundary_reached = False
         for i, arrival in times.items():

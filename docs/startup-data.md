@@ -60,7 +60,8 @@ coordinates** to use the region's example near Black Hawk or Hinton. The general
 **Polygon spread · roads & fuel** mode remains available for other locations.
 Place a fire in supported vegetation, then use the usual step/playback controls.
 Roads and active/burned polygons appear on the map. Default limits are 128 tiles
-(1,152 km²), 1.5 million fuel patches, 500 seeds and 96 simulated hours.
+(1,152 km²), 1.5 million fuel patches and 500 seeds. Polygon playback has no
+duration cap; historical comparisons still stop at the final available date.
 Known road surface classes with missing widths
 use the configured 6 m assumption; unknown surfaces remain unsupported. This is
 an uncalibrated scenario with constant wind.
@@ -86,7 +87,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **149-test Python suite** covers integrity, atomic import, repeat startup,
+The **157-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.

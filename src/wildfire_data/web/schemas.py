@@ -121,6 +121,15 @@ class StepInput(Input):
             raise ValueError('The UTC time exceeds the supported calendar') from None
 
 
+def simulation_time(origin, step):
+    """Validate a scenario timestamp without imposing a forecast horizon."""
+    origin = StepInput.aware(origin)
+    try:
+        return origin + timedelta(hours=step * 12)
+    except OverflowError:
+        raise ValueError('The next simulation time exceeds the supported calendar') from None
+
+
 class IgnitionInput(Input):
     latitude: float = Field(ge=24, le=84)
     longitude: float = Field(ge=-179, le=-50)

@@ -186,6 +186,30 @@ class ExpandingTests(unittest.TestCase):
     def test_negative_coordinate_alignment(self):
         self.assertEqual(tile_key(-.01,-3000.01),(-1,-2))
 
+    def test_expanding_clock_continues_after_burnout_without_reignition(self):
+        self.store.cover = [(box(2800,1500,2900,1600),'grassland')]
+        frame = self.step(self.seed())
+        self.assertTrue(frame['extinct'])
+        burned = frame['burned_area_m2']
+        for step in [8,12,1000,100000]:
+            frame['state']['step_index'] = step
+            later = self.step(frame)
+            self.assertEqual(later['elapsed_hours'],(step+1)*12)
+            self.assertFalse(later['finished'])
+            self.assertTrue(later['extinct'])
+            self.assertEqual(later['burned_area_m2'],burned)
+            self.assertEqual(later['active_patch_count'],0)
+            self.assertEqual(later['state']['tiles'],frame['state']['tiles'])
+
+    def test_expanding_time_validation_happens_before_source_loading(self):
+        frame = self.seed()
+        for change in [{'state':{**frame['state'],'step_index':10**30}}, {'origin_at':'9999-12-31T23:00:00Z'},
+                       {'origin_at':'2026-01-01T00:00:00'}]:
+            loaded = list(self.store.loaded)
+            with self.assertRaises(ValueError):
+                self.scenarios.advance(ExpandingStep.model_validate({'state':frame['state'], 'origin_at':frame['origin_at'], **change}))
+            self.assertEqual(self.store.loaded,loaded)
+
     def test_shutdown_closes_landscape_readers(self):
         self.local.expanding = self.scenarios
         self.local.close()
@@ -281,6 +305,36 @@ class ExpandingApiTests(unittest.TestCase):
         self.assertEqual(step.json()['historical']['date'],'2026-05-12')
         self.assertIn('current retained',step.json()['metadata']['landscape_time_basis'])
         self.assertEqual(step.json(),self.client.post('/api/landscape/step',json=body).json())
+
+    def test_historical_polygon_advances_past_96_hours_and_still_stops_at_last_date(self):
+        from wildfire_data.model.local_spread import VEGETATED
+        from wildfire_data.web.historical_firms import day_cutoff, LAST_DAY
+        from datetime import timedelta
+        self.local.policy = policy(rates_m_min=dict.fromkeys(VEGETATED,.1), residence_minutes=600)
+        response = self.client.post('/api/landscape/firms/historical',json={'date':'2026-05-11','bounds':self.bounds})
+        frame = response.json()
+        incident = frame['state']['incident_id']
+        for day in range(1,6):
+            body = {'state':frame['state'],'origin_at':frame['origin_at'],
+                    'historical':{'start_date':'2026-05-11','bounds':self.bounds}}
+            response = self.client.post('/api/landscape/step',json=body)
+            self.assertEqual(response.status_code,200,response.text)
+            frame = response.json()
+            self.assertEqual(frame['elapsed_hours'],day*24)
+            self.assertFalse(frame['finished'])
+            self.assertEqual(frame['state']['incident_id'],incident)
+        self.assertGreater(frame['active_patch_count'],0)
+        self.assertEqual(self.client.post('/api/landscape/step',json=body).json(),frame)
+        self.assertGreater(len(frame['state']['tiles']),1)
+        first_date = LAST_DAY-timedelta(days=1)
+        frame = self.scenarios.initialize(self.coordinates,day_cutoff(first_date))
+        body = {'state':frame['state'],'origin_at':frame['origin_at'],
+                'historical':{'start_date':first_date.isoformat(),'bounds':self.bounds}}
+        last = self.client.post('/api/landscape/step',json=body)
+        self.assertEqual(last.status_code,200,last.text)
+        self.assertTrue(last.json()['finished'])
+        body['state'] = last.json()['state']
+        self.assertEqual(self.client.post('/api/landscape/step',json=body).status_code,422)
 
     def test_busy_and_failed_preparation_are_explicit_and_retryable(self):
         self.local.lock.acquire()

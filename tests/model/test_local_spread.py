@@ -107,6 +107,57 @@ class LocalSpreadTests(unittest.TestCase):
         arrivals = m.arrivals((0,))
         self.assertEqual(arrivals, {0: 0., 1: 100., 2: 200.})
 
+    def test_spread_continues_past_96_hours_and_replays_earlier_frames(self):
+        from wildfire_data.model.local_spread import VEGETATED
+        sampler = bundle(self.temp.name, bounds=(0,0,6000,30))
+        m = LocalSpreadModel(sampler, policy(rates_m_min=dict.fromkeys(VEGETATED,.1), residence_minutes=600))
+        seed = min(range(len(m.centers)), key=lambda i: m.centers[i].x)
+        at_96 = m.frame((seed,), 96*60)
+        at_168 = m.frame((seed,), 168*60)
+        self.assertGreater(at_168['burned_patch_count'], at_96['burned_patch_count'])
+        self.assertGreater(at_168['active_patch_count'], 0)
+        self.assertTrue(at_168['future_arrivals'])
+        self.assertEqual(m.frame((seed,), 96*60), at_96)
+        self.assertEqual(m.frame((seed,), 168*60), at_168)
+        self.assertGreater(max(m.arrivals((seed,)).values()), 96*60)
+        complete = m.frame((seed,), 365*24*60)
+        self.assertEqual(complete['burned_patch_count'], len(m.patches))
+        self.assertEqual(complete['active_patch_count'], 0)
+        self.assertFalse(complete['future_arrivals'])
+        self.assertEqual(m.frame((seed,), 96*60), at_96)
+
+    def test_requested_horizon_is_lazy_and_continuation_reuses_search_work(self):
+        from unittest.mock import patch
+        sampler = bundle(self.temp.name, bounds=(0,0,6000,30))
+        m = LocalSpreadModel(sampler, policy())
+        seed = min(range(len(m.centers)), key=lambda i: m.centers[i].x)
+        with patch.object(m, '_projection', wraps=m._projection) as projection:
+            initial = m.frame((seed,), 0)
+            self.assertLess(projection.call_count, 5)
+            at_12 = m.frame((seed,), 720)
+            calls = projection.call_count
+            self.assertEqual(m.frame((seed,), 0), initial)
+            self.assertEqual(m.frame((seed,), 720), at_12)
+            self.assertEqual(projection.call_count, calls)
+            m.frame((seed,), 1440)
+            extended_calls = projection.call_count
+            self.assertGreater(extended_calls, calls)
+            m.clear_arrivals()
+            projection.reset_mock()
+            m.frame((seed,), 1440)
+            self.assertEqual(projection.call_count, extended_calls)
+
+    def test_arrival_cache_eviction_preserves_replay_and_invalid_times_fail(self):
+        m = self.model(bounds=(0,0,900,30))
+        first = m.frame((0,), 720)
+        for seed in range(1,12):
+            m.frame((seed,), 720)
+        self.assertLessEqual(len(m.arrival_searches), 8)
+        self.assertEqual(m.frame((0,), 720), first)
+        for invalid in [-1, float('nan'), float('inf')]:
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                m.frame((0,), invalid)
+
     def test_fuel_specific_patch_duration_applies_to_burnout_and_spread(self):
         from wildfire_data.model.local_spread import VEGETATED
         durations = {k: 240 if k == 'needleleaf' else 60 for k in VEGETATED}

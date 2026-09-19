@@ -12,7 +12,7 @@ The application is being rebuilt incrementally from `recreate-project-prompt.md`
    all map and source controls, and verify interactions with browser tests.
 
 All three implementation milestones are complete. The model run uses the
-real public release; **149 Python tests and 14 frontend tests pass**, saved-model
+real public release; **157 Python tests and 14 frontend tests pass**, saved-model
 evaluation reproduces all recorded scores, and real-model API replay is
 deterministic. Production-browser checks cover request cancellation, historical
 replay, keyboard controls, mobile layout and automated accessibility. See
@@ -38,3 +38,8 @@ license, configurations, and the original application repository are preserved.
 [Fuel duration and water barriers](fuel-and-water.md) documents vegetation-based
 burnout, its fallback assumptions, and the native water mask that prevents
 coarse spread over Athabasca River cells missed by the generalized map.
+
+Polygon playback now has no duration cap. Arrival searches resume only through
+the requested time, while spatial budgets and historical date limits still
+apply. See [feature availability](feature-map.md) and
+[verification](verification.md#polygon-playback-without-a-duration-cap).

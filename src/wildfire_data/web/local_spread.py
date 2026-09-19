@@ -1,6 +1,6 @@
 """Explicit local scenario endpoints, isolated from the fitted 1 km model."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import lru_cache
 import hashlib
 import json
@@ -9,11 +9,11 @@ from threading import Lock
 from typing import Annotated
 
 from fastapi import HTTPException
-from pydantic import Field
+from pydantic import Field, model_validator
 from wildfire_data.core.grid import cell_from_id
 from wildfire_data.model.features.fuel_barrier_features import FuelBarrierSampler
 from wildfire_data.model.local_spread import LocalSpreadModel, TravelPolicy
-from wildfire_data.web.schemas import Input, SeedInput, StepInput
+from wildfire_data.web.schemas import Input, SeedInput, StepInput, simulation_time
 
 
 class LocalSeedInput(SeedInput):
@@ -25,12 +25,18 @@ class LocalStateInput(Input):
     model_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     incident_id: str = Field(pattern=r'^[0-9a-f]{64}$')
     seed_ids: list[Annotated[int, Field(ge=0, le=60000, strict=True)]] = Field(min_length=1, max_length=500)
-    step_index: int = Field(ge=0, le=8, strict=True)
+    step_index: int = Field(ge=0, strict=True)
 
 
 class LocalStepInput(Input):
     state: LocalStateInput
     origin_at: datetime
+
+    @model_validator(mode='after')
+    def representable_time(self):
+        self.origin_at = StepInput.aware(self.origin_at)
+        simulation_time(self.origin_at, self.state.step_index + 1)
+        return self
 
 
 class LocalScenarios:
@@ -75,6 +81,7 @@ class LocalScenarios:
 
     def configuration(self):
         return {'available': bool(self.regions) or bool(self.expanding), 'expanding': bool(self.expanding), 'kind': 'uncalibrated landscape scenario',
+            'max_steps': None,
             'expanding_error': self.expanding_error,
             'limits': self.expanding.configuration() if self.expanding else None,
             'presets': self.presets,
@@ -86,7 +93,7 @@ class LocalScenarios:
 
     def response(self, region, model, seeds, step, origin):
         origin = StepInput.aware(origin)
-        valid_at = origin + timedelta(hours=step*12)
+        valid_at = simulation_time(origin, step)
         frame = model.frame(seeds, step*720)
         incident = hashlib.sha256(f'{model.identity}:{tuple(seeds)}:{origin.isoformat()}'.encode()).hexdigest()
         points = []
@@ -110,7 +117,7 @@ class LocalScenarios:
             'burned_area_m2': sum(p['burned_area_m2'] for p in points),
             'active_patch_count': frame['active_patch_count'], 'burned_patch_count': frame['burned_patch_count'],
             'new_ignition_count': None, 'terrain_missing_count': 0,
-            'finished': step >= 8 or frame['boundary_reached'],
+            'finished': frame['boundary_reached'],
             'extinct': not frame['future_arrivals'] and frame['active_patch_count'] == 0,
             'boundary_reached': frame['boundary_reached'], 'metadata': frame['assumptions']}
 
@@ -147,8 +154,6 @@ def register_local_routes(app):
             incident = hashlib.sha256(f'{model.identity}:{seeds}:{origin.isoformat()}'.encode()).hexdigest()
             if state.incident_id != incident:
                 raise ValueError('Local incident identity changed')
-            if state.step_index >= 8:
-                raise ValueError('Local simulation ends at 96 hours')
             if model.frame(seeds, state.step_index*720)['boundary_reached']:
                 raise ValueError('Local simulation reached the boundary of collected evidence')
             return s.response(state.region, model, seeds, state.step_index+1, origin)

@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 149 tests passed |
+| Python behavior/regression suite | 157 tests passed |
 | Frontend API, timeline and cancellation unit tests | 14 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -174,6 +174,29 @@ Repeat the new check against a server with the retained native sources:
 python tests/web/browser_fuel_water.py http://127.0.0.1:8000
 ```
 
+### Polygon playback without a duration cap
+
+The unlimited-duration checkpoint passed 157 Python and 14 frontend tests.
+New model checks keep an active front spreading beyond 96 hours, replay earlier
+frames after advancement and cache eviction, and verify that placement traverses
+only its requested horizon. Advancing a completed fire does not replenish fuel.
+Fixed-pilot API checks reach 144 hours; expanding API checks continue after
+burnout through large step indices. Historical polygon checks reach 120 hours
+and still stop at the last observation date. Invalid calendar overflows fail
+before source loading.
+
+`tests/web/browser_unlimited_landscape.py` passed with real retained Colorado
+roads and vegetation through 168 hours, crossing 96 hours with Play and checking
+saved-frame playback plus exact API replay. At one week, the scenario covered
+14 tiles with 2,040 active patches and 49.98 km² of burned area. Individual steps
+took 0.63–12.11 seconds including browser interaction and tile expansion;
+the fire continued spreading beyond 96 hours. No JavaScript errors occurred.
+Only basemap images were stubbed.
+Reports, the final frame and a screenshot are saved locally under
+`artifacts/unlimited-landscape/browser/`. This verifies continued execution,
+not long-horizon forecast accuracy. Tile/patch budgets, fixed evidence boundaries
+and historical date availability still apply.
+
 ### Commands
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in
@@ -201,6 +224,7 @@ Keep that server running and, in another terminal, run:
 python tests/web/browser_app.py http://127.0.0.1:8001
 python tests/web/browser_restored_landscape.py http://127.0.0.1:8001
 python tests/web/browser_regional_landscape.py http://127.0.0.1:8001
+python tests/web/browser_unlimited_landscape.py http://127.0.0.1:8001
 ```
 
 The browser suite requires a ready model. Train the public-CSV model first using

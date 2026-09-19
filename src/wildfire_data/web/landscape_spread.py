@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 
 from fastapi import HTTPException
-from pydantic import Field
+from pydantic import Field, model_validator
 from pyproj import Transformer
 from shapely.geometry import box, mapping
 from shapely.ops import transform
@@ -16,7 +16,7 @@ from wildfire_data.core.grid import TRAINING_GRID_CRS
 from wildfire_data.model.local_spread import LocalSpreadModel, LOCAL_VERSION
 from wildfire_data.model.features.fuel_barrier_features import projected_wind
 from wildfire_data.providers.landscape.tiles import LandscapeTiles, LandscapeMosaic, TILE_METRES, tile_key, tile_bounds
-from wildfire_data.web.schemas import Input, SeedInput, BoundsInput, HistoricalFirmsInput, HistoricalContext, StepInput
+from wildfire_data.web.schemas import Input, SeedInput, BoundsInput, HistoricalFirmsInput, HistoricalContext, StepInput, simulation_time
 from wildfire_data.web.historical_firms import day_cutoff, LAST_DAY
 
 
@@ -44,13 +44,21 @@ class ExpandingState(Input):
     incident_id: str = Field(pattern=r'^[0-9a-f]{64}$')
     ignitions: list[GeographicSeed] = Field(min_length=1, max_length=500)
     tiles: list[TileInput] = Field(min_length=1, max_length=MAX_REQUEST_TILES)
-    step_index: int = Field(ge=0, le=8, strict=True)
+    step_index: int = Field(ge=0, strict=True)
 
 
 class ExpandingStep(Input):
     state: ExpandingState
     origin_at: datetime
     historical: HistoricalContext | None = None
+
+    @model_validator(mode='after')
+    def representable_time(self):
+        self.origin_at = StepInput.aware(self.origin_at)
+        simulation_time(self.origin_at, self.state.step_index + (2 if self.historical else 1))
+        if self.historical and (self.origin_at != day_cutoff(self.historical.start_date) or self.state.step_index % 2):
+            raise ValueError('Historical landscape origin or step changed')
+        return self
 
 
 class ExpandingScenarios:
@@ -135,7 +143,7 @@ class ExpandingScenarios:
 
     def close(self):
         for model in [*self.models.values(), *self.tile_models.values()]:
-            model.arrivals.cache_clear()
+            model.clear_arrivals()
         self.models.clear()
         self.tile_models.clear()
         self.store.close()
@@ -185,6 +193,7 @@ class ExpandingScenarios:
         return result
 
     def frame(self, coordinates, samplers, step, origin):
+        simulation_time(origin, step)
         # Recompute from the same geographic ignitions when evidence grows.
         # Aligned tiles preserve existing fuel geometry, arrival paths and burns.
         while True:
@@ -193,13 +202,13 @@ class ExpandingScenarios:
             wind = projected_wind(model.sampler.to_grid, (lat, lon), self.local.policy.wind_east_m_s, self.local.policy.wind_north_m_s)
             if wind != model.wind:
                 model.wind = wind
-                model.arrivals.cache_clear()
+                model.clear_arrivals()
             seeds = model.seed_ids(coordinates)
             frame = model.frame(seeds, step*720)
             keys = set()
             reach = self.local.policy.max_spotting_distance_m if self.local.policy.spotting_distance_per_wind_m_s else 0
             if frame['boundary_reached'] or reach:
-                for i, arrival in model.arrivals(seeds).items():
+                for i, arrival in model.arrivals(seeds, until=step*720).items():
                     if arrival > step*720:
                         continue
                     g = model.patches[i].geometry
@@ -218,7 +227,7 @@ class ExpandingScenarios:
         incident = self.incident(ignition_dicts, origin)
         result['state'] = {'profile': self.profile, 'incident_id': incident, 'ignitions': ignition_dicts,
             'tiles': [{'x': k[0], 'y': k[1], 'sha256': samplers[k].sha256} for k in sorted(samplers)], 'step_index': step}
-        result.update(expanding=True, finished=step >= 8 or result['extinct'], boundary_reached=False,
+        result.update(expanding=True, finished=False, boundary_reached=False,
             coverage={'type': 'Feature', 'geometry': mapping(transform(model.sampler.to_geo.transform, model.sampler.bounds)),
                       'properties': {'tiles': len(samplers)}})
         result['metadata'].update(tile_count=len(samplers), limits=self.configuration(), coverage_mode='expands from offline road archive and retained NALCMS; no road network requests',
@@ -233,14 +242,10 @@ class ExpandingScenarios:
         origin = StepInput.aware(body.origin_at)
         if state.profile != self.profile or state.incident_id != self.incident([p.model_dump() for p in state.ignitions], origin):
             raise ValueError('Landscape scenario identity changed; start a new scenario')
-        if state.step_index >= 8:
-            raise ValueError('Landscape simulation ends at 96 hours')
         if len({(t.x,t.y) for t in state.tiles}) != len(state.tiles):
             raise ValueError('Duplicate landscape tile state')
         self.check_tile_budget(len(state.tiles))
         samplers = {(t.x,t.y): self.store.load((t.x,t.y), expected=t.sha256) for t in state.tiles}
-        if body.historical and (origin != day_cutoff(body.historical.start_date) or state.step_index % 2):
-            raise ValueError('Historical landscape origin or step changed')
         step = state.step_index + (2 if body.historical else 1)
         return self.frame([(p.longitude,p.latitude) for p in state.ignitions], samplers, step, origin)
 

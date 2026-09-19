@@ -134,7 +134,7 @@ node --test frontend/tests/*.test.js
 Tests include the reference behavior contracts for grid identity, finite-fuel
 spread, local road barriers, HTTP validation, live observations, and historical
 comparison. Runtime preparation uses a single worker and bounded shared caches.
-The verified checkpoint passes 149 Python tests, 14 frontend tests, and production
+The verified checkpoint passes 157 Python tests, 14 frontend tests, and production
 Chromium checks for playback races, historical replay, 128-frame history,
 2,000-cell displays, keyboard focus and mobile layout. See
 [verification instructions and fixture boundaries](docs/verification.md) to

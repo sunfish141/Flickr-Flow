@@ -56,6 +56,34 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn('local', response.json())
         self.assertTrue(self.client.get('/api/config').json()['local_spread']['available'])
 
+    def test_fixed_polygon_endpoint_advances_past_96_hours_without_restarting(self):
+        from wildfire_data.model.local_spread import VEGETATED
+        scenarios = self.client.app.state.local_scenarios
+        scenarios.policy = policy(rates_m_min=dict.fromkeys(VEGETATED,.02), residence_minutes=1440)
+        scenarios.model.cache_clear()
+        frame = self.seed()
+        incident = frame['state']['incident_id']
+        for step in range(1,13):
+            body = {'state':frame['state'], 'origin_at':frame['origin_at']}
+            response = self.client.post('/api/local/step', json=body)
+            self.assertEqual(response.status_code,200,response.text)
+            frame = response.json()
+            self.assertEqual(frame['elapsed_hours'], step*12)
+            self.assertFalse(frame['finished'])
+            self.assertEqual(frame['state']['incident_id'],incident)
+        self.assertGreater(frame['active_patch_count'],0)
+        self.assertEqual(self.client.post('/api/local/step',json=body).json(),frame)
+        self.assertIsNone(self.client.get('/api/config').json()['local_spread']['max_steps'])
+
+    def test_calendar_overflow_is_rejected_before_loading_a_model(self):
+        frame = self.seed()
+        for change in [{'state':{**frame['state'],'step_index':10**30}}, {'origin_at':'9999-12-31T23:00:00Z'}]:
+            body = {'state':frame['state'], 'origin_at':frame['origin_at'], **change}
+            with patch.object(self.client.app.state.local_scenarios, 'model', side_effect=AssertionError('Must validate time first')):
+                response = self.client.post('/api/local/step',json=body)
+            self.assertEqual(response.status_code,422,response.text)
+            self.assertIn('calendar', response.text)
+
     def test_invalid_region_state_and_time_are_rejected(self):
         frame = self.seed()
         for key, value in [('model_sha256', '0'*64), ('seed_ids', [60000]), ('incident_id', '0'*64)]:

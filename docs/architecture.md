@@ -45,9 +45,21 @@ disable warmup. This moves graph construction into startup for retained areas;
 new areas still require preparation. The cache is bounded, rather than a mesh
 of the entire state/province. Derived tile files persist on disk; prepared
 graphs are rebuilt into memory after restart. Cache eviction does not delete
-source files or change scenario state. Model v4 and expanding profile v2 require
+source files or change scenario state. Model v5 and expanding profile v2 require
 a fresh landscape scenario after upgrading. Class-specific polygon residence
 times are included in the policy identity.
+
+Polygon arrival searches resume Dijkstra only through the requested time,
+retaining tentative future arrivals and the pending queue. Each model keeps
+at most eight ignition-set searches in an LRU cache. Settled arrival times let
+earlier frames replay exactly after advancement; eviction recomputes the same
+search, and wind changes clear it. Expansion rebuilds the search over the enlarged
+mosaic while reusing prepared tile graphs. There is no 96-hour cutoff or full
+future search during placement. Normal playback can continue after natural
+burnout, without replenishing fuel. Spatial budgets and historical date limits
+remain in force. API input validates the next representable calendar timestamp
+before loading sources, rather than imposing an arbitrary forecast horizon.
+
 The CSV-only terrain provider returns explicit missingness outside the retained
 candidate-cell lookup; source rasters remain necessary for broader terrain,
 vegetation, historical observations and fine road geometry.

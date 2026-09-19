@@ -34,7 +34,7 @@ expand over local tiles and support timeline replay. See
 
 Regional bounds are map presets, not administrative boundaries or fire barriers.
 Each detailed scenario defaults to 128 tiles (1,152 km²), 1.5 million fuel patches,
-500 starting points and 96 hours. Tile and patch budgets are configurable in
+and 500 starting points, with no simulation duration cap. Tile and patch budgets are configurable in
 `config/local_spread.json`; the app displays the server's current area limit.
 The app does not build a state/province-sized mesh. Selection is
 retained when switching to FIRMS, which uses only the visible map area in detailed
@@ -49,7 +49,11 @@ frame. Hiding the tab pauses playback while explicit fire placement and FIRMS
 loading continue. Busy landscape requests retry automatically; Pause cancels
 the load and its retries. Reset clears the scenario. Provider failures retain the
 last completed frame; rate-limited FIRMS requests show a bounded retry countdown.
-Historical comparison advances 24 hours per frame and stops at the final day.
+Normal polygon playback advances 12 hours per frame for as long as requested,
+including after the fire burns out; exhausted fuel does not regrow. Historical
+comparison advances 24 hours per frame and stops at the final available day.
+Fixed pilots still stop at the boundary of collected evidence. Start a new
+polygon scenario after upgrading to the unlimited-duration engine.
 
 Burnout follows each ignition's vegetation-based fuel estimate. The 1 km model
 uses land-cover type, mapped vegetation fraction and quality-supported canopy

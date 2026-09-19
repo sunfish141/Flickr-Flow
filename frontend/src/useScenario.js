@@ -79,7 +79,7 @@ export function useScenario() {
       dispatch({ type: 'append', frame: result });
       if (result.finished) setPlaying(false);
       if (result.local) {
-        message(result.boundary_reached ? 'Fire reached the boundary of collected evidence. Start a new scenario to continue elsewhere.' : `Local scenario: ${(result.active_area_m2 / 10000).toFixed(1)} active hectares; ${(result.burned_area_m2 / 10000).toFixed(1)} burned hectares. ${result.extinct ? 'No active fire remains.' : result.finished ? 'End of the 96-hour scenario.' : 'Rates and wind are scenario assumptions.'}${result.historical ? ' Historical observations use the current retained landscape.' : ''}`);
+        message(result.boundary_reached ? 'Fire reached the boundary of collected evidence. Start a new scenario to continue elsewhere.' : `Local scenario: ${(result.active_area_m2 / 10000).toFixed(1)} active hectares; ${(result.burned_area_m2 / 10000).toFixed(1)} burned hectares. ${result.finished ? 'End of the historical date range.' : result.extinct ? 'No active fire remains. Burned fuel stays exhausted as the clock continues.' : 'Rates and wind are scenario assumptions.'}${result.historical ? ' Historical observations use the current retained landscape.' : ''}`);
         return;
       }
       message(result.historical ? `Historical FIRMS: ${result.historical.date} (UTC), ${result.historical.detection_count} detections. ${result.finished ? 'End of the historical date range.' : 'Purple observations compared with the continuing simulation.'}` : result.extinct ? 'No active fire remains. Burned cells stay masked as the clock continues.' :

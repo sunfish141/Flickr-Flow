@@ -52,8 +52,12 @@ gate before the source patch burns out. Native land-cover classes identify
 fuel; coarse canopy measurements are not downscaled into invented 30 m values.
 Patch area controls burned/active area totals, not an inferred fuel depth.
 Configurations without the class map retain their explicit uniform
-`residence_minutes` value. Model v4 changes the scenario identity; start a new
+`residence_minutes` value. Model v5 changes the scenario identity; start a new
 polygon scenario after upgrading.
+
+Normal polygon playback has no duration cap. Advancing beyond 96 hours keeps
+each patch's original arrival and burnout times; exhausted fuel never regrows.
+The clock can continue after all reachable fuel has burned out.
 
 ## Water exclusion
 
