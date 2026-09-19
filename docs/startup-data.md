@@ -52,13 +52,26 @@ automatic preparation unless settings enable it.
 
 ## Restored controls and measurements
 
-Choose **Polygon spread · roads & fuel** in Simulation for expanding 30 m
-fuel-patch playback, or an Edson/Boulder polygon entry for a fixed pilot.
+Choose **Colorado · polygon spread** or **Alberta · polygon spread** in Simulation
+to view the full state/province. Both use expanding 30 m fuel-patch playback from
+the national archives, replacing the small Boulder/Edson demo choices. Zoom in
+to place a fire anywhere with supported vegetation, or open **Place by
+coordinates** to use the region's example near Black Hawk or Hinton. The general
+**Polygon spread · roads & fuel** mode remains available for other locations.
 Place a fire in supported vegetation, then use the usual step/playback controls.
-Roads and active/burned polygons appear on the map. Limits remain 24 tiles,
+Roads and active/burned polygons appear on the map. Limits remain 24 tiles (216 km²),
 500 seeds and 96 simulated hours. Known road surface classes with missing widths
 use the configured 6 m assumption; unknown surfaces remain unsupported. This is
 an uncalibrated scenario with constant wind.
+
+`expanding.presets` in `config/local_spread.json` defines the regional map views
+and example coordinates. `/api/config` exposes those presets only when the
+expanding archive is available. The bounds are approximate view extents; they
+do not restrict ignitions or stop spread at political borders. Each scenario
+prepares nearby tiles on demand, rather than loading the entire region. FIRMS
+retains the regional selection and uses visible map bounds; zoom in around a
+fire before loading. Fixed pilot routes and bundles remain usable; their menu
+choices are the fallback when the national archive is unavailable.
 
 The cell inspector reports land cover and quality-supported canopy measurements.
 The tested Edson cell has needleleaf forest and effectively 100% mapped vegetated
@@ -68,7 +81,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **116-test Python suite** covers integrity, atomic import, repeat startup,
+The **117-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.
@@ -91,3 +104,27 @@ Install Playwright/Chromium as described in [verification](verification.md).
 Local reports/screenshots are under `artifacts/restored-landscape/`.
 Source data and models remain excluded from Git; syncing code does not transfer
 the 17 GB runtime archive.
+
+## Colorado and Alberta verification
+
+Both regional examples were verified outside the original pilot bounds using
+real retained fuel/road data. Each advanced from one 3 km tile to two at 12 hours:
+
+| Region / example | Coordinates (latitude, longitude) | Initial road features | Burned area at 12 hours |
+| --- | --- | --- | --- |
+| Colorado / near Black Hawk | 39.83, -105.54 | 149 | 29.97 ha |
+| Alberta / near Hinton | 53.39, -117.64 | 443 | 16.14 ha |
+
+These are scenario outputs, not observed fire measurements. Chromium verified
+both regional selections, example coordinates, road/perimeter rendering,
+12-hour progression, reset when changing regions, and 390 px layout. Separate
+intercepted FIRMS requests checked that the map frames the full region, regional
+selection persists across source tabs, and live/historical requests use the
+expanding endpoint and visible bounds. Those control checks do not contact NASA.
+
+```bash
+python tests/web/browser_regional_landscape.py http://127.0.0.1:8000
+```
+
+Reports, real API frames and screenshots are written under
+`artifacts/regional-landscape/browser/` and excluded from Git.

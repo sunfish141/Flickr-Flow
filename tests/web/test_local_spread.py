@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from dataclasses import asdict
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
@@ -64,14 +65,39 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_optional_config_missing_does_not_claim_availability(self):
-        self.assertFalse(LocalScenarios('/nonexistent-landscape-config').configuration()['available'])
+        configuration = LocalScenarios('/nonexistent-landscape-config').configuration()
+        self.assertFalse(configuration['available'])
+        self.assertEqual(configuration['presets'], [])
+
+    def test_regional_presets_depend_on_expanding_archive_not_pilot_bundles(self):
+        config = json.loads(self.config.read_text())
+        presets = json.loads((Path(__file__).resolve().parents[2]/'config/local_spread.json').read_text())['expanding']['presets']
+        config.update(regions=[], expanding={'enabled': True, 'presets': presets})
+        self.config.write_text(json.dumps(config))
+        with patch('wildfire_data.web.landscape_spread.ExpandingScenarios') as expanding:
+            scenarios = LocalScenarios(self.config)
+        self.addCleanup(scenarios.close)
+        configuration = scenarios.configuration()
+        self.assertTrue(configuration['available'])
+        self.assertTrue(configuration['expanding'])
+        self.assertEqual(configuration['regions'], [])
+        self.assertEqual(configuration['presets'], presets)
+        self.assertEqual({p['id'] for p in presets}, {'colorado', 'alberta'})
+        for preset in presets:
+            west, south, east, north = preset['bounds']
+            example = preset['example_ignition']
+            self.assertTrue(west < example['longitude'] < east)
+            self.assertTrue(south < example['latitude'] < north)
+        self.assertIs(scenarios.expanding, expanding.return_value)
 
     def test_missing_offline_archive_keeps_fixed_pilots_available(self):
         config=json.loads(self.config.read_text())
         config['expanding']={'enabled':True,'source_config':'missing-source.json',
-                             'data_root':'data','release':'2026-08-19.0','road_archive':'missing-archive.json'}
+                             'data_root':'data','release':'2026-08-19.0','road_archive':'missing-archive.json',
+                             'presets':[{'id':'alberta','label':'Alberta'}]}
         self.config.write_text(json.dumps(config))
         scenarios=LocalScenarios(self.config)
         self.assertTrue(scenarios.configuration()['available'])
         self.assertFalse(scenarios.configuration()['expanding'])
+        self.assertEqual(scenarios.configuration()['presets'], [])
         self.assertIn('Offline road archive unavailable',scenarios.configuration()['expanding_error'])

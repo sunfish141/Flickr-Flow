@@ -81,6 +81,7 @@ export default function FireMap({ frame, selectedCell, visibility, placing, base
     mapApi.current = {
       fit(points) { if (points.length) map.fitBounds(points.map(p => [p.latitude, p.longitude]), { padding: [85, 85], maxZoom: 12, animate: !reduced }); },
       locate(lat, lon) { map.setView([lat, lon], 11, { animate: !reduced }); },
+      fitRegion([west, south, east, north]) { map.fitBounds([[south, west], [north, east]], { padding: [40, 40], maxZoom: 12, animate: !reduced }); },
       bounds() { return map.getBounds(); },
     };
     const resize = new ResizeObserver(() => map.invalidateSize());

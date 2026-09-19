@@ -2,6 +2,20 @@
   "mesh_m": 30,
   "expanding": {
     "enabled": true,
+    "presets": [
+      {
+        "id": "alberta",
+        "label": "Alberta",
+        "bounds": [-120.1, 48.9, -109.9, 60.1],
+        "example_ignition": {"latitude": 53.39, "longitude": -117.64}
+      },
+      {
+        "id": "colorado",
+        "label": "Colorado",
+        "bounds": [-109.1, 36.9, -102.0, 41.1],
+        "example_ignition": {"latitude": 39.83, "longitude": -105.54}
+      }
+    ],
     "source_config": "vegetation_inspector_sources.json",
     "data_root": "../data",
     "release": "2026-08-19.0",
@@ -31,13 +45,13 @@
   "regions": [
     {
       "id": "edson",
-      "label": "Edson, Alberta",
+      "label": "Edson pilot, Alberta",
       "manifest": "../data/landscape/edson-pilot-20260916/v2/manifest.json",
       "sha256": "f8f9f5a971e4a62bb8a9f2ee908194d763d987ae43922eae7fa4373b9aca5d2c"
     },
     {
       "id": "boulder",
-      "label": "Boulder, Colorado",
+      "label": "Boulder pilot, Colorado",
       "manifest": "../data/landscape/boulder-pilot-20260916/v2/manifest.json",
       "sha256": "869fe931f32d356e663c5d656b1d6520a35b03e2e0cc4221737f45e521fc6735"
     }

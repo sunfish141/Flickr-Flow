@@ -6,6 +6,7 @@ import { RequestCoordinator } from './requestCoordinator';
 export function useScenario() {
   const [config, setConfig] = useState(null);
   const [localRegion, setLocalRegion] = useState('');
+  const expanding = localRegion === 'auto' || !!config?.local_spread?.presets?.some(region => region.id === localRegion);
   const [scenario, dispatch] = useReducer(scenarioReducer, undefined, emptyScenario);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -91,13 +92,13 @@ export function useScenario() {
     }
     if (scenario.ignitions.length >= 500) { message('At most 500 starting points are supported.', true); return false; }
     const ignitions = [...scenario.ignitions, { latitude, longitude, intensity }];
-    if (localRegion === 'auto') message('Preparing local fuel and road tiles around the fire. First use may take several minutes…');
-    return request(localRegion === 'auto' ? 'landscape/seed' : localRegion ? 'local/seed' : 'seed', { ignitions, ...(localRegion && localRegion !== 'auto' ? { region: localRegion } : {}) }, result => {
+    if (expanding) message('Preparing local fuel and road tiles around the fire. First use may take several minutes…');
+    return request(expanding ? 'landscape/seed' : localRegion ? 'local/seed' : 'seed', { ignitions, ...(localRegion && !expanding ? { region: localRegion } : {}) }, result => {
       dispatch({ type: 'replace', frame: result, ignitions, source: 'placed' });
       message(result.local ? 'Starting fuel patch added. Playback uses experimental travel rates and constant scenario wind.' : 'Starting fire added. Add more cells, or press Play to predict spread.');
     });
   };
-  const loadFirms = (bounds, date = null) => request((localRegion === 'auto' ? 'landscape/' : '') + (date ? 'firms/historical' : 'firms'), date ? { date, bounds } : bounds, result => {
+  const loadFirms = (bounds, date = null) => request((expanding ? 'landscape/' : '') + (date ? 'firms/historical' : 'firms'), date ? { date, bounds } : bounds, result => {
     dispatch({ type: 'replace', frame: result, source: 'firms' });
     if (result.expanding) {
       message(`Loaded satellite-seeded landscape scenario: ${result.metadata.mapped_starting_cells} starting cells; ${result.metadata.unsupported_observed_cells} cells without supported vegetation. Fine ignition positions are assumptions within observed 1 km cells. ${result.historical ? 'Historical observations use the current retained landscape, not a historical reconstruction.' : 'Landscape coverage expands with the fire.'}`);
@@ -109,7 +110,7 @@ export function useScenario() {
   const reset = () => { pause(); dispatch({ type: 'reset' }); message('Scenario reset.'); };
   const seek = step => { pause(); dispatch({ type: 'seek', step }); message(''); };
   return { config, scenario, frame, playing, busy, busySeconds, firmsCooldown, speed, setSpeed, status, message,
-    localRegion, setLocalRegion: value => { reset(); setLocalRegion(value); },
+    localRegion, expanding, setLocalRegion: value => { reset(); setLocalRegion(value); },
     pause, advance, addIgnition, loadFirms, reset, seek,
     play: () => { if (!frame || frame.finished) return; message(''); setPlaying(true); },
   };

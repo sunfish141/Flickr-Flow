@@ -11,6 +11,7 @@ export default function App() {
   const [mode, setMode] = useState('place');
   const [placing, setPlacing] = useState(false);
   const [intensity, setIntensity] = useState(70);
+  const [coordinates, setCoordinates] = useState({ latitude: '53.02', longitude: '-117.31' });
   const [scope, setScope] = useState('all');
   const [historicalMode, setHistoricalMode] = useState(false);
   const [historicalDate, setHistoricalDate] = useState('2026-05-11');
@@ -23,6 +24,8 @@ export default function App() {
   const daily = !!frame?.historical;
   const stepHours = daily ? 24 : 12;
   const historicalDates = config?.historical_firms;
+  const presets = config?.local_spread?.presets || [];
+  const selectedPreset = presets.find(region => region.id === sim.localRegion);
   const validHistoricalDate = historicalDate.length === 10 && historicalDate >= (historicalDates?.min_date ?? '2026-05-11') && historicalDate <= (historicalDates?.max_date ?? '2026-08-21');
   const ready = sim.localRegion ? config?.local_spread?.available : config?.model_ready;
   const canPlace = ready && !busy && !playing && (!frame || (frame.state.step_index === 0 && scenario.source === 'placed'));
@@ -65,14 +68,14 @@ export default function App() {
     sim.pause(); setPlacing(false); setSelectedCell(null);
     const [west, south, east, north] = config.firms_bounds;
     const view = mapApi.current.bounds();
-    const bounds = scope === 'all' && sim.localRegion !== 'auto' ? { west, south, east, north } : {
+    const bounds = scope === 'all' && !sim.expanding ? { west, south, east, north } : {
       west: Math.max(west, view.getWest()), south: Math.max(south, view.getSouth()),
       east: Math.min(east, view.getEast()), north: Math.min(north, view.getNorth()),
     };
-    sim.message(sim.localRegion === 'auto' ? 'Loading satellite observations and preparing local fuel and road tiles. First use may take several minutes…' : historicalMode ? `Loading retained FIRMS for ${historicalDate}…` : 'Loading current observations from three VIIRS satellites…');
+    sim.message(sim.expanding ? 'Loading satellite observations and preparing local fuel and road tiles. First use may take several minutes…' : historicalMode ? `Loading retained FIRMS for ${historicalDate}…` : 'Loading current observations from three VIIRS satellites…');
     await sim.loadFirms(bounds, historicalMode ? historicalDate : null);
   }
-  const switchMode = value => { sim.pause(); setPlacing(false); if (value === 'firms' && sim.localRegion && sim.localRegion !== 'auto') sim.setLocalRegion(config?.local_spread?.expanding ? 'auto' : ''); setMode(value); };
+  const switchMode = value => { sim.pause(); setPlacing(false); if (value === 'firms' && sim.localRegion && !sim.expanding) sim.setLocalRegion(config?.local_spread?.expanding ? 'auto' : ''); setMode(value); };
   return <>
     <a href="#scenario-controls" className="skip-link">Skip to scenario controls</a>
     <a href="#cell-list" className="skip-link">Skip to cell list</a>
@@ -95,10 +98,12 @@ export default function App() {
             <label htmlFor="local-region">Simulation<select id="local-region" value={sim.localRegion} disabled={!!busy || playing} onChange={e => {
               const value = e.target.value;
               sim.setLocalRegion(value); setPlacing(false); setSelectedCell(null);
-              const region = config.local_spread.regions.find(r => r.id === value);
-              if (region) mapApi.current?.locate((region.bounds[1] + region.bounds[3]) / 2, (region.bounds[0] + region.bounds[2]) / 2);
-            }}><option value="">1 km spread model</option>{config.local_spread.expanding && <option value="auto">Polygon spread · roads & fuel</option>}{(mode === 'place' ? config.local_spread.regions : []).map(r => <option key={r.id} value={r.id}>{r.label} · polygon spread</option>)}</select></label>
-            {sim.localRegion && <p className="hint">Experimental {config.local_spread.mesh_m} m fuel patches with road barriers. Uncalibrated travel rates and constant scenario wind; urban mixtures and structures are unsupported. Unknown road widths use a {config.local_spread.policy.unknown_road_width_m} m assumption where surface type is mapped. {sim.localRegion === 'auto' ? 'Roads are read from a local archive. Landscape tiles are built as the fire spreads; first preparation may take several minutes.' : 'Place within the selected region.'}</p>}
+              const region = [...presets, ...config.local_spread.regions].find(r => r.id === value);
+              if (region) mapApi.current?.fitRegion(region.bounds);
+              if (region?.example_ignition) setCoordinates({ latitude: String(region.example_ignition.latitude), longitude: String(region.example_ignition.longitude) });
+            }}><option value="">1 km spread model</option>{config.local_spread.expanding && <option value="auto">Polygon spread · roads & fuel</option>}{[...presets, ...(mode === 'place' && !presets.length ? config.local_spread.regions : [])].map(r => <option key={r.id} value={r.id}>{r.label} · polygon spread</option>)}</select></label>
+            {selectedPreset && <p className="hint">{selectedPreset.label} view. Zoom in to place a fire, or use the example coordinates below. Fuel and road coverage loads around each fire as it spreads.</p>}
+            {sim.localRegion && <p className="hint">Experimental {config.local_spread.mesh_m} m fuel patches with road barriers. Uncalibrated travel rates and constant scenario wind; urban mixtures and structures are unsupported. Unknown road widths use a {config.local_spread.policy.unknown_road_width_m} m assumption where surface type is mapped. {sim.expanding ? 'Roads are read from a local archive. Landscape tiles are built as the fire spreads; first preparation may take several minutes.' : 'Place within the selected region.'}</p>}
           </div>}
         {config?.local_spread?.expanding_error && <p className="hint">Expanding fuel and road simulation is unavailable on this server.</p>}
         {Object.keys(config?.data_preparation?.errors || {}).length > 0 && <p className="hint">Some vegetation or polygon data could not be prepared. Check the server startup logs, then restart to retry.</p>}
@@ -114,15 +119,15 @@ export default function App() {
               const lat = Number(values.get('latitude')), lon = Number(values.get('longitude'));
               if (await add(lat, lon)) mapApi.current?.locate(lat, lon);
             }}><div className="coordinate-fields">
-              <label htmlFor="latitude">Latitude<input id="latitude" name="latitude" type="number" min="24" max="84" step="any" required defaultValue="53.02" /></label>
-              <label htmlFor="longitude">Longitude<input id="longitude" name="longitude" type="number" min="-179" max="-50" step="any" required defaultValue="-117.31" /></label>
+              <label htmlFor="latitude">Latitude<input id="latitude" name="latitude" type="number" min="24" max="84" step="any" required value={coordinates.latitude} onChange={e => setCoordinates(value => ({ ...value, latitude: e.target.value }))} /></label>
+              <label htmlFor="longitude">Longitude<input id="longitude" name="longitude" type="number" min="-179" max="-50" step="any" required value={coordinates.longitude} onChange={e => setCoordinates(value => ({ ...value, longitude: e.target.value }))} /></label>
             </div><button id="coordinate-place" className="secondary-button" disabled={!canPlace}>Add fire here</button></form>
           </details>
         </section>
         <section id="firms-panel" hidden={mode !== 'firms'} aria-label="Load satellite observations">
           <p className="panel-copy">Start with NASA satellite detections across North America or in your map view.</p>
-          <label className="firms-scope" htmlFor="firms-scope">Fetch area<select id="firms-scope" value={sim.localRegion === 'auto' ? 'view' : scope} disabled={!!busy} onChange={e => setScope(e.target.value)}><option value="all" disabled={sim.localRegion === 'auto'}>All North America</option><option value="view">Visible map area</option></select></label>
-          {sim.localRegion === 'auto' && <p className="hint">Zoom in around the fire before loading. Detailed scenarios support up to 500 starting cells across 24 tiles (216 km²). To load all North America, select the Existing 1 km model.</p>}
+          <label className="firms-scope" htmlFor="firms-scope">Fetch area<select id="firms-scope" value={sim.expanding ? 'view' : scope} disabled={!!busy} onChange={e => setScope(e.target.value)}><option value="all" disabled={sim.expanding}>All North America</option><option value="view">Visible map area</option></select></label>
+          {sim.expanding && <p className="hint">Zoom in around the fire before loading. Detailed scenarios support up to 500 starting cells across 24 tiles (216 km²). To load all North America, select the 1 km spread model.</p>}
           <label className="layer-toggle" htmlFor="historical-mode"><span>Historical mode</span><input id="historical-mode" type="checkbox" checked={historicalMode} onChange={e => { sim.pause(); setHistoricalMode(e.target.checked); }} /></label>
           {historicalMode && <div className="historical-controls">
             <label htmlFor="historical-date">Observation date (UTC)</label>
@@ -152,7 +157,7 @@ export default function App() {
       </aside>
       <section className="map-workspace" aria-label="Map and simulation playback">
         <FireMap frame={frame} selectedCell={selectedCell} visibility={visibility} placing={placing && canPlace} basemap={basemap} mapApi={mapApi} onPlace={add} onInspect={inspect} onGroup={() => { sim.pause(); setPlacing(false); }} onError={text => sim.message(text, true)} />
-        <div className="map-title">{sim.localRegion ? 'LOCAL LANDSCAPE · EXPERIMENTAL SCENARIO' : 'NORTH AMERICA · 1 KM GRID'}</div>
+        <div className="map-title">{selectedPreset ? `${selectedPreset.label.toUpperCase()} · POLYGON SPREAD` : sim.localRegion ? 'LOCAL LANDSCAPE · EXPERIMENTAL SCENARIO' : 'NORTH AMERICA · 1 KM GRID'}</div>
         <button id="fit" className="map-button" onClick={fit}>Fit fires</button>
         <div id="map-instruction" className="map-instruction">{placing ? 'Click the map to add starting fire cells.' : frame ? 'Inspect cells on the map or in the scenario cell list.' : 'Start with a fire or current satellite detections.'}</div>
         <div id="status" className={`status ${status.error ? 'error' : ''} ${status.text ? '' : 'empty'}`} role="status" aria-live="polite" aria-atomic="true">{status.text}{busy && <span aria-hidden="true"> · {sim.busySeconds} s elapsed</span>}</div>

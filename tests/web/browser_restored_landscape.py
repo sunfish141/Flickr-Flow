@@ -27,8 +27,8 @@ async def main(base_url):
         await page.goto(base_url)
         await expect(page.locator('#local-region')).to_be_visible()
         await expect(page.locator('#local-region option[value="auto"]')).to_have_text('Polygon spread · roads & fuel')
-        await expect(page.locator('#local-region option[value="edson"]')).to_have_count(1)
-        await expect(page.locator('#local-region option[value="boulder"]')).to_have_count(1)
+        await expect(page.locator('#local-region option[value="alberta"]')).to_have_count(1)
+        await expect(page.locator('#local-region option[value="colorado"]')).to_have_count(1)
         await page.locator('#show-basemap').uncheck()
         await page.locator('.coordinates summary').click()
         await page.locator('#latitude').fill('40.015')
@@ -75,7 +75,7 @@ async def main(base_url):
         await page.screenshot(path=str(output / 'mobile.png'), full_page=True)
         assert not errors, errors
         report = {'status': 'passed', 'source_mode': 'real retained vegetation and road archives',
-            'checks': ['canopy and land-cover inspector', 'fixed and expanding mode choices',
+            'checks': ['canopy and land-cover inspector', 'regional and expanding mode choices',
                        'polygon perimeters and roads', '12-hour expansion', 'saved polygon timeline replay', '390px layout'],
             'canopy_density': vegetation['density_fraction'], 'mapped_roads': len(initial['roads']['features']),
             'seed_tiles': len(initial['state']['tiles']), 'advanced_tiles': len(advanced['state']['tiles']),

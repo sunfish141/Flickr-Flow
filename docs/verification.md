@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 116 tests passed |
+| Python behavior/regression suite | 117 tests passed |
 | Frontend API, timeline and cancellation unit tests | 11 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -47,6 +47,14 @@ checks for canopy inspection, road geometry, perimeters, expansion and replay.
 Startup also passed without the old repository or downloads after restoration.
 See [startup data verification](startup-data.md#verification) for measurements.
 
+Colorado and Alberta regional checks also passed real-source polygon seeds and
+12-hour expansion outside the old Boulder/Edson pilots. Each grew from one tile
+to two. Browser checks verified both views and coordinate examples; isolated
+FIRMS probes verified viewport bounds and regional selection across live and
+historical controls without contacting NASA. Reports and frames are under
+`artifacts/regional-landscape/browser/`; see the
+[regional measurements](startup-data.md#colorado-and-alberta-verification).
+
 ## Repeat the checks
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in
@@ -72,6 +80,8 @@ Keep that server running and, in another terminal, run:
 
 ```bash
 python tests/web/browser_app.py http://127.0.0.1:8001
+python tests/web/browser_restored_landscape.py http://127.0.0.1:8001
+python tests/web/browser_regional_landscape.py http://127.0.0.1:8001
 ```
 
 The browser suite requires a ready model. Train the public-CSV model first using

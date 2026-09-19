@@ -18,9 +18,21 @@ capabilities report absent sources rather than synthesizing them from labels.
 Vegetation and polygon sources now prepare at startup, and their real archives
 are restored locally. The inspector reports measured land cover and canopy
 estimates with sufficient quality support. Simulation choices include **Polygon
-spread · roads & fuel** and Edson/Boulder pilots. Polygons use native roads and
-fuel patches, expand over local tiles and support timeline replay. See
+spread · roads & fuel**, **Colorado · polygon spread** and **Alberta · polygon
+spread**. The regional choices replace the small Boulder/Edson demos, frame the
+whole state/province, and offer example ignitions near Black Hawk and Hinton.
+They use the US/Canada source archive and prepare local tiles wherever a fire
+is placed in supported vegetation. Polygons use native roads and fuel patches,
+expand over local tiles and support timeline replay. See
 [startup preparation and measured checks](startup-data.md).
+
+Regional bounds are map presets, not administrative boundaries or fire barriers.
+Each detailed scenario remains limited to 24 tiles (216 km²), 500 starting points
+and 96 hours; the app does not build a state/province-sized mesh. Selection is
+retained when switching to FIRMS, which uses only the visible map area in detailed
+mode. Zoom in before loading satellite detections. Fixed pilot APIs remain
+available, with pilot choices shown as a fallback if the expanding archive is
+unavailable.
 
 Playback stores the most recent 128 complete frames. Scrubbing pauses requests;
 resuming traverses saved frames before extending the simulation. Pause, reset,
