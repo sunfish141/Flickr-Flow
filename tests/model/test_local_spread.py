@@ -1,10 +1,12 @@
 import tempfile
 import unittest
+from pathlib import Path
 from shapely.geometry import box, LineString, shape
 from shapely.ops import unary_union
 
 from model.fuel_fixture import bundle, policy
 from wildfire_data.model.local_spread import LocalSpreadModel
+from wildfire_data.providers.landscape.tiles import LandscapeMosaic
 
 
 class LocalSpreadTests(unittest.TestCase):
@@ -92,3 +94,38 @@ class LocalSpreadTests(unittest.TestCase):
         m = LocalSpreadModel(s, policy(residence_minutes=60), mesh_m=100)
         arrivals = m.arrivals((0,))
         self.assertEqual(arrivals, {0: 0., 1: 100., 2: 200.})
+
+    def test_joined_tiles_match_direct_mesh_with_roads_holes_and_wind(self):
+        root = Path(self.temp.name)
+        bounds = [(0,0,120,120),(120,0,240,120)]
+        land = box(0,0,240,120).difference(box(80,30,160,60))
+        roads = [(LineString([(125,0),(125,90)]), {})]
+        samplers = [bundle(root/str(i), bounds=b, cover=[(land.intersection(box(*b)), 'grassland')], roads=roads)
+                    for i,b in enumerate(bounds)]
+        p = policy(wind_east_m_s=3, wind_north_m_s=-1)
+        components = [LocalSpreadModel(s, p) for s in samplers]
+        sampler = LandscapeMosaic(samplers)
+        joined = LocalSpreadModel.join(sampler, p, components)
+        direct = LocalSpreadModel(sampler, p)
+        coordinates = [sampler.to_geo.transform(20,100)]
+        for minute in [0,60,120,240,720]:
+            a = joined.frame(joined.seed_ids(coordinates), minute)
+            b = direct.frame(direct.seed_ids(coordinates), minute)
+            self.assertEqual(a['cells'], b['cells'])
+            for status in ['active','burned']:
+                ga = unary_union([shape(f['geometry']) for f in a['perimeters']['features'] if f['properties']['status']==status])
+                gb = unary_union([shape(f['geometry']) for f in b['perimeters']['features'] if f['properties']['status']==status])
+                self.assertLess(ga.symmetric_difference(gb).area, 1e-8)
+                self.assertLess(ga.intersection(joined.road_surface).area, 1e-8)
+
+    def test_empty_neighbor_tile_and_wrong_policy_cannot_create_fuel_or_edges(self):
+        a = bundle(Path(self.temp.name)/'a')
+        b = bundle(Path(self.temp.name)/'b', bounds=(120,0,240,120), cover=[(box(120,0,240,120),'water')])
+        p = policy()
+        first = LocalSpreadModel(a,p)
+        empty = LocalSpreadModel(b,p,allow_empty=True)
+        joined = LocalSpreadModel.join(LandscapeMosaic([a,b]),p,[first,empty])
+        self.assertEqual(len(joined.patches),len(first.patches))
+        self.assertEqual(joined.adjacency,first.adjacency)
+        with self.assertRaisesRegex(ValueError,'policy or mesh'):
+            LocalSpreadModel.join(LandscapeMosaic([a,b]),policy(unknown_road_width_m=4),[first,empty])

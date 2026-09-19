@@ -6,8 +6,8 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 122 tests passed |
-| Frontend API, timeline and cancellation unit tests | 11 tests passed |
+| Python behavior/regression suite | 130 tests passed |
+| Frontend API, timeline and cancellation unit tests | 14 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
 | Browser JavaScript errors / CSP violations | None |
@@ -17,7 +17,7 @@ The browser suite starts with real API placement and 12-hour predictions through
 keyboard placement, inspector focus, pausing in flight and resuming, and then
 uses explicit API fixtures to test 2,000-cell display pagination, escaped API
 text, the rolling 128-frame window, reset during inference, an overlapping
-canceled request and replacement seed, hiding during initialization, source
+canceled request and replacement seed, retaining explicit loads when hiding the tab, source
 changes, provider failure and retry cooldown.
 
 Historical fixtures verify fixed comparison bounds, complete state requests,
@@ -69,6 +69,48 @@ satellite responses come from NASA. Reports and screenshots are stored under
 precedence, absent keys, file isolation and keeping credentials out of API output.
 
 ## Repeat the checks
+
+### Landscape preparation and memory-cache checks
+
+The cache/geometry checkpoint passed 130 Python and 14 frontend tests. New checks
+cover retained tile identity, corrupt/missing assets, cache eviction, startup
+warmup, reuse across region switches, and expansion without rebuilding old tile
+graphs. Joined tiles match a direct mesh with roads, holes and wind. Existing
+corner-leakage, spotting, fuel-residence and replay tests still pass.
+
+Browser regressions verify that explicit seed and FIRMS loads survive tab hiding,
+a busy response retries the same body without another click, and source changes
+still invalidate late responses. API unit tests verify canceling a pending retry,
+the retry limit, and propagating real source failures. Regional and live NASA
+browser checks pass with the optimized engine. Measured 12-hour Colorado and
+Alberta demo active/burned areas match the previous checkpoint.
+
+Local timings on this machine (single process; OS file cache not cleared):
+
+| Measurement | Before | After |
+| --- | --- | --- |
+| Colorado placement; native tile on disk, graph not in memory | 4.45 s | 1.82 s |
+| Alberta placement; native tile on disk, graph not in memory | 3.15 s | 1.31 s |
+| Returning to prepared Colorado after another region; engine only | 4.48 s | 0.0014 s |
+| Alberta expansion into one new retained tile; engine only | not compared | 1.46 s |
+| Next Alberta step with both tile graphs prepared; engine only | not compared | 0.046 s |
+
+Real FIRMS HTTP checks loaded 15 observations across nine Colorado landscape
+tiles: initial preparation took 18.32 s, revisiting after loading Alberta took
+0.20 s including the 3.32 MB response. A narrow Alberta request took 0.61 s,
+then 0.009 s on revisit. Initial Colorado preparation included previously
+unbuilt tiles and source reads. These measurements demonstrate reuse; they are
+not a guarantee for uncached locations or network latency. Reports and frames
+are retained locally under `artifacts/landscape-performance/`.
+
+After restarting the main server and preparing 24 retained tile graphs during
+startup, the first live nine-tile Colorado FIRMS request took 3.86 s; the repeat
+took 0.21 s. Both returned the same seven mapped cells and 3.32 MB response.
+Startup prepares tile graphs; fetching current FIRMS observations, joining
+tiles, and serializing the response still contribute to the first request.
+These timings are recorded in `after-startup-http.json` in the same directory.
+
+### Commands
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in
 `frontend/`. Run from the repository root:

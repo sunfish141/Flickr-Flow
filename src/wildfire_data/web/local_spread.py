@@ -10,9 +10,6 @@ from typing import Annotated
 
 from fastapi import HTTPException
 from pydantic import Field
-from shapely.geometry import mapping
-from shapely.ops import transform
-
 from wildfire_data.core.grid import cell_from_id
 from wildfire_data.model.features.fuel_barrier_features import FuelBarrierSampler
 from wildfire_data.model.local_spread import LocalSpreadModel, TravelPolicy
@@ -74,7 +71,7 @@ class LocalScenarios:
 
     def close(self):
         if self.expanding:
-            self.expanding.store.close()
+            self.expanding.close()
 
     def configuration(self):
         return {'available': bool(self.regions) or bool(self.expanding), 'expanding': bool(self.expanding), 'kind': 'uncalibrated landscape scenario',
@@ -105,9 +102,7 @@ class LocalScenarios:
                 'incident_id': incident, 'seed_ids': seeds, 'step_index': step},
             'origin_at': origin.isoformat(), 'valid_at': valid_at.isoformat(), 'elapsed_hours': step*12,
             'points': points, 'perimeters': frame['perimeters'],
-            'roads': {'type': 'FeatureCollection', 'features': [
-                {'type': 'Feature', 'geometry': mapping(transform(model.sampler.to_geo.transform, g)),
-                 'properties': p} for g, p in model.sampler.roads]},
+            'roads': model.roads_geojson,
             'active_count': sum(p['status'] == 'active' for p in points),
             'burned_count': sum(p['burned_area_m2'] > 0 for p in points),
             'active_area_m2': sum(p['active_area_m2'] for p in points),

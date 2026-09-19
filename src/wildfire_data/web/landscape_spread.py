@@ -1,5 +1,6 @@
 """Expanding landscape playback for placed and satellite-seeded scenarios."""
 from datetime import datetime, timedelta, timezone
+from collections import OrderedDict
 import hashlib
 import json
 import math
@@ -11,7 +12,7 @@ from pyproj import Transformer
 from shapely.geometry import box, mapping
 from shapely.ops import transform
 
-from wildfire_data.core.grid import TRAINING_GRID_CRS, cell_from_id
+from wildfire_data.core.grid import TRAINING_GRID_CRS
 from wildfire_data.model.local_spread import LocalSpreadModel, LOCAL_VERSION
 from wildfire_data.model.features.fuel_barrier_features import projected_wind
 from wildfire_data.providers.landscape.tiles import LandscapeTiles, LandscapeMosaic, tile_key, tile_bounds
@@ -52,18 +53,71 @@ class ExpandingScenarios:
         self.store = LandscapeTiles(parent/config['source_config'], parent/config['data_root'], config['release'],
             road_archive=archive, road_archive_sha256=config.get('road_archive_sha256'),
             raster_cache=parent/config['raster_cache'] if config.get('raster_cache') else None)
-        self.profile = hashlib.sha256(f'expanding/v1:{LOCAL_VERSION}:{self.store.identity}:{local.policy.identity}:{local.mesh_m}'.encode()).hexdigest()
+        self.profile = hashlib.sha256(f'expanding/v2:{LOCAL_VERSION}:{self.store.identity}:{local.policy.identity}:{local.mesh_m}'.encode()).hexdigest()
         self.to_grid = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
-        self.cached = None
+        self.tile_models, self.models = OrderedDict(), OrderedDict()
+        self.prewarm_tiles = min(24, max(0, int(config.get('prewarm_tiles', 0))))
+
+    @staticmethod
+    def retain(cache, key, model, *, max_entries, max_patches):
+        cache[key] = model
+        cache.move_to_end(key)
+        while len(cache) > max_entries or sum(len(m.patches) for m in cache.values()) > max_patches:
+            cache.popitem(last=False)
+
+    def tile_model(self, sampler):
+        key = sampler.sha256
+        if key not in self.tile_models:
+            model = LocalSpreadModel(sampler, self.local.policy, mesh_m=self.local.mesh_m,
+                                     max_patches=250000, allow_empty=True)
+            self.retain(self.tile_models, key, model, max_entries=48, max_patches=250000)
+            return model
+        self.tile_models.move_to_end(key)
+        return self.tile_models[key]
 
     def model(self, samplers):
         ordered = [samplers[k] for k in sorted(samplers)]
         key = tuple(s.sha256 for s in ordered)
-        if self.cached is None or self.cached[0] != key:
-            model = LocalSpreadModel(LandscapeMosaic(ordered), self.local.policy,
-                                     mesh_m=self.local.mesh_m, max_patches=250000)
-            self.cached = (key, model)
-        return self.cached[1]
+        if key not in self.models:
+            components = [self.tile_model(s) for s in ordered]
+            model = LocalSpreadModel.join(LandscapeMosaic(ordered), self.local.policy,
+                components, mesh_m=self.local.mesh_m, max_patches=250000)
+            self.retain(self.models, key, model, max_entries=8, max_patches=500000)
+            return model
+        self.models.move_to_end(key)
+        return self.models[key]
+
+    def warm(self, presets):
+        """Prepare examples and recent retained tiles before accepting requests."""
+        if not self.prewarm_tiles:
+            return
+        import logging
+        logger = logging.getLogger('uvicorn.error')
+        keys = []
+        for preset in presets:
+            point = preset.get('example_ignition')
+            if point:
+                keys.append(tile_key(*self.to_grid.transform(point['longitude'], point['latitude'])))
+        directory = self.store.data_root/'landscape/tiles'/self.store.identity
+        for path in sorted(directory.glob('*_*/manifest.json'), key=lambda p: p.stat().st_mtime_ns, reverse=True):
+            x, y = path.parent.name.split('_')
+            key = (int(x), int(y))
+            if key not in keys:
+                keys.append(key)
+        logger.info('Warming %d landscape tiles in memory', min(len(keys), self.prewarm_tiles))
+        for key in reversed(keys[:self.prewarm_tiles]):
+            try:
+                self.tile_model(self.store.load(key))
+            except (ValueError, OSError):
+                logger.exception('Could not prewarm landscape tile %s', key)
+        logger.info('Prepared %d landscape tile graphs in memory', len(self.tile_models))
+
+    def close(self):
+        for model in [*self.models.values(), *self.tile_models.values()]:
+            model.arrivals.cache_clear()
+        self.models.clear()
+        self.tile_models.clear()
+        self.store.close()
 
     def load(self, keys, samplers):
         keys = set(keys)-samplers.keys()
@@ -84,13 +138,7 @@ class ExpandingScenarios:
         if satellite:
             # One supported patch per observed 1 km cell, not ignition of every
             # fine element in an uncertain satellite footprint.
-            representatives = {}
-            for i, patch in enumerate(model.patches):
-                cell = cell_from_id(patch.cell_id)
-                center = box(*cell.bounds_projected).centroid
-                distance = model.centers[i].distance(center)
-                if patch.cell_id not in representatives or distance < representatives[patch.cell_id][0]:
-                    representatives[patch.cell_id] = (distance, i)
+            representatives = model.satellite_representatives
             mapped = []
             for lon, lat in coordinates:
                 x, y = self.to_grid.transform(lon, lat)
@@ -176,7 +224,8 @@ def register_expanding_routes(app, firms, historical_firms, historical_day):
         if not getattr(local, 'expanding', None):
             raise HTTPException(503, 'Expanding landscape data is unavailable on this server')
         if not local.lock.acquire(blocking=False):
-            raise HTTPException(503, 'Landscape preparation is busy. Try again shortly.')
+            raise HTTPException(503, 'Landscape preparation is finishing another request. Waiting to retry.',
+                                headers={'Retry-After': '2'})
         try:
             return operation(local.expanding)
         except (ValueError, OverflowError) as exc:

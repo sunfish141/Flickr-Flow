@@ -61,6 +61,8 @@ class Runtime:
                 self.data_preparation['errors']['startup'] = 'Data preparation failed; check startup logs and restart to retry.'
         try:
             self.local_scenarios = LocalScenarios(local_config if self.load_defaults else None)
+            if self.local_scenarios.expanding:
+                self.local_scenarios.expanding.warm(self.local_scenarios.presets)
         except Exception:
             logger.warning('Optional landscape sources could not be initialized')
         if self.historical is None and self.load_defaults:

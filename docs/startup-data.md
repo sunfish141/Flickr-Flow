@@ -81,7 +81,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **122-test Python suite** covers integrity, atomic import, repeat startup,
+The **130-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.
@@ -104,6 +104,28 @@ Install Playwright/Chromium as described in [verification](verification.md).
 Local reports/screenshots are under `artifacts/restored-landscape/`.
 Source data and models remain excluded from Git; syncing code does not transfer
 the 17 GB runtime archive.
+
+## Landscape memory preparation
+
+Startup also warms the regional examples and recently generated native landscape
+tiles, controlled by `expanding.prewarm_tiles` in `config/local_spread.json`
+(default 24; zero disables it). Readiness waits for this work. Logs report the
+warmup and the number of prepared tile graphs. Subsequent placement and satellite
+initialization reuse those road-cut fuel patches and connections directly.
+
+Verified tile samplers and prepared tile graphs are retained in memory, with
+48-entry limits and a 250,000-patch graph budget. Eight assembled models can
+retain at most 500,000 patch references. Expansion reuses existing tile graphs
+and computes only cross-tile connections. Source changes invalidate cache hits;
+unknown cover and road barriers retain their original semantics. Native tile
+files persist; in-memory graphs rebuild after restart. New areas still require
+tile extraction and preparation, so startup does not promise instant access to
+every location in Colorado and Alberta.
+
+Explicit FIRMS loads continue when switching browser tabs. If another request
+is finishing preparation, the same browser request waits and retries; Pause
+cancels that wait. Invalid sources still return a failure without automatic
+retry. See [architecture](architecture.md) for cache and request limits.
 
 ## Colorado and Alberta verification
 

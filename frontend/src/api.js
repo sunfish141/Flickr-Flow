@@ -1,9 +1,29 @@
-export async function api(path, body, signal) {
-  const response = await fetch(path, {
+function waitForRetry(milliseconds, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(new DOMException('Request canceled', 'AbortError')); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, milliseconds);
+    if (signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+export async function api(path, body, signal, { onRetry } = {}) {
+  const options = {
     method: body === undefined ? 'GET' : 'POST',
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body), signal,
-  });
+  };
+  let response;
+  for (let attempt = 0; ; attempt++) {
+    response = await fetch(path, options);
+    const seconds = Number(response.headers?.get('Retry-After'));
+    if (response.status !== 503 || !(seconds > 0) || attempt >= 60) break;
+    // Only admission-busy responses include Retry-After. Real preparation
+    // failures propagate immediately. Keep the same request ticket while waiting.
+    await response.body?.cancel();
+    onRetry?.();
+    await waitForRetry(Math.min(seconds, 5) * 1000, signal);
+  }
   let data;
   try { data = await response.json(); }
   catch (error) {

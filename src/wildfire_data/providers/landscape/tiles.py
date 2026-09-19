@@ -1,5 +1,6 @@
 """Immutable, globally aligned landscape tiles for expanding scenarios."""
 import hashlib
+from collections import OrderedDict
 from contextlib import ExitStack
 import json
 import math
@@ -39,10 +40,17 @@ class LandscapeTiles:
         self.identity = hashlib.sha256(f'aligned-landscape-offline/v1:{sha256_file(self.source_config)}:{self.archive.sha256}'.encode()).hexdigest()
         self.readers, self.reader_stack = {}, ExitStack()
         self.raster_cache = raster_cache
+        self.samplers = OrderedDict()
 
     def close(self):
         self.reader_stack.close()
         self.readers.clear()
+        self.samplers.clear()
+
+    @staticmethod
+    def signature(path, manifest):
+        paths = [path, *(path.parent / manifest['artifacts'][name]['path'] for name in ('cover', 'roads'))]
+        return tuple((s.st_size, s.st_mtime_ns, s.st_ctime_ns) for s in (p.stat() for p in paths))
 
     def path(self, key):
         x, y = key
@@ -50,6 +58,14 @@ class LandscapeTiles:
 
     def load(self, key, expected=None):
         path = self.path(key)
+        if key in self.samplers:
+            signature, sampler = self.samplers[key]
+            if signature == self.signature(path, sampler.manifest):
+                if expected and sampler.sha256 != expected:
+                    raise ValueError('Landscape manifest checksum mismatch')
+                self.samplers.move_to_end(key)
+                return sampler
+            del self.samplers[key]
         if not path.exists():
             if expected:
                 raise ValueError('Pinned landscape tile is missing; restore it or start a new scenario')
@@ -65,7 +81,11 @@ class LandscapeTiles:
                 bounds=geographic, output=path.parent, data_root=self.data_root,
                 projected_bounds=projected, road_halo_m=250,
                 readers=self.readers, stack=self.reader_stack, raster_cache=self.raster_cache)
-        return FuelBarrierSampler(path, expected_sha256=expected)
+        sampler = FuelBarrierSampler(path, expected_sha256=expected)
+        self.samplers[key] = (self.signature(path, sampler.manifest), sampler)
+        while len(self.samplers) > 48:
+            self.samplers.popitem(last=False)
+        return sampler
 
 
 class LandscapeMosaic(FuelBarrierSampler):

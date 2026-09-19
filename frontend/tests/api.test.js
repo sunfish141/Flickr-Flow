@@ -30,3 +30,38 @@ test('unreadable responses are explained but interrupted response bodies stay ca
   globalThis.fetch = async () => ({ json: async () => { throw new DOMException('canceled', 'AbortError'); } });
   await assert.rejects(api('/api/step', {}), { name: 'AbortError' });
 });
+
+test('busy preparation retries the same request and does not retry permanent failures', async t => {
+  const calls = [], waiting = [];
+  t.mock.method(globalThis, 'fetch', async (...args) => {
+    calls.push(args);
+    return calls.length === 1 ? Response.json({ detail: 'busy' }, { status: 503, headers: { 'Retry-After': '.001' } }) : Response.json({ ready: true });
+  });
+  assert.deepEqual(await api('/api/landscape/firms', { west: -118 }, undefined, { onRetry: () => waiting.push(true) }), { ready: true });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][1].body, calls[1][1].body);
+  assert.equal(waiting.length, 1);
+  globalThis.fetch = async () => Response.json({ detail: 'archive unavailable' }, { status: 503 });
+  await assert.rejects(api('/api/landscape/firms', {}), /archive unavailable/);
+});
+
+test('canceling while waiting for preparation stops retries immediately', async t => {
+  const controller = new AbortController();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return Response.json({ detail: 'busy' }, { status: 503, headers: { 'Retry-After': '2' } });
+  });
+  await assert.rejects(api('/api/landscape/seed', {}, controller.signal, { onRetry: () => controller.abort() }), { name: 'AbortError' });
+  assert.equal(calls, 1);
+});
+
+test('busy retries have a finite limit', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return Response.json({ detail: 'still busy' }, { status: 503, headers: { 'Retry-After': '.001' } });
+  });
+  await assert.rejects(api('/api/landscape/seed', {}), /still busy/);
+  assert.equal(calls, 61);
+});

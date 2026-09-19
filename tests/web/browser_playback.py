@@ -68,7 +68,7 @@ async def verify_playback(page, base_url, checks):
     await page.unroute('**/api/seed', replacement)
     checks.append('Reset discards late inference; old cleanup cannot clear a replacement seed request')
 
-    # Hiding the tab cancels explicit initialization as well as playback.
+    # Explicit initialization survives a tab switch while playback stays paused.
     await page.locator('#reset').click()
     hidden = HeldResponse(seed)
     await page.route('**/api/seed', hidden)
@@ -79,13 +79,11 @@ async def verify_playback(page, base_url, checks):
       document.dispatchEvent(new Event('visibilitychange'));
       delete document.hidden;
     }""")
-    await expect(page.locator('#status')).to_contain_text('Request canceled')
+    await expect(page.locator('#coordinate-place')).to_be_disabled()
     await hidden.finish()
-    await expect(page.locator('#active-count')).to_have_text('0')
+    await expect(page.locator('#active-count')).to_have_text('1')
     await expect(page.locator('#playback-state')).to_have_text('PAUSED')
     await page.unroute('**/api/seed', hidden)
-    await page.locator('#coordinate-place').click()
-    await expect(page.locator('#active-count')).to_have_text('1')
 
     async def failed(route):
         await route.fulfill(status=503, json={'detail': 'Fixture provider unavailable'})
@@ -96,6 +94,34 @@ async def verify_playback(page, base_url, checks):
     await expect(page.locator('#active-count')).to_have_text('1')
     await expect(page.locator('#step')).to_be_enabled()
     await page.unroute('**/api/step', failed)
+
+    # Busy preparation waits under the same ticket, and a live source load
+    # survives tab hiding while the previous server request finishes.
+    retained = HeldResponse({**seed, 'metadata': {
+        'eligible_detection_count': 1, 'recent_detections_excluded': 0, 'as_of': seed['origin_at']}})
+    attempts = []
+    async def retry_then_load(route):
+        attempts.append(route.request.post_data_json)
+        if len(attempts) == 1:
+            await route.fulfill(status=503, headers={'Retry-After': '.05'}, json={'detail': 'Fixture landscape busy'})
+        else:
+            await retained(route)
+    await page.route('**/api/firms', retry_then_load)
+    await page.locator('#firms-tab').click()
+    await page.locator('#load-firms').click()
+    await retained.wait()
+    await expect(page.locator('#status')).to_contain_text('retry automatically')
+    await page.evaluate("""() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      delete document.hidden;
+    }""")
+    await expect(page.locator('#load-firms')).to_be_disabled()
+    await retained.finish()
+    await expect(page.locator('#status')).to_contain_text('Loaded 1 observations')
+    assert len(attempts) == 2 and attempts[0] == attempts[1]
+    await page.unroute('**/api/firms', retry_then_load)
+    checks.append('Busy admission retries once without another click; FIRMS loading survives tab hiding')
 
     stale = HeldResponse({**seed, 'active_count': 99, 'metadata': {
         'eligible_detection_count': 99, 'recent_detections_excluded': 0, 'as_of': seed['origin_at']}})
@@ -117,7 +143,7 @@ async def verify_playback(page, base_url, checks):
     await expect(page.locator('#load-firms')).to_be_disabled()
     await expect(page.locator('#load-firms')).to_be_enabled(timeout=5000)
     await page.unroute('**/api/firms', cooldown)
-    checks.append('Tab hiding and source changes cancel pending loads; provider errors preserve frames; retry cooldown recovers')
+    checks.append('Explicit loads survive tab hiding; source changes cancel loads; provider errors preserve frames; retry cooldown recovers')
 
     bounds = dict(west=-179, south=24, east=-52, north=84)
     def historical(step):

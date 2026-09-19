@@ -2,6 +2,7 @@
   "mesh_m": 30,
   "expanding": {
     "enabled": true,
+    "prewarm_tiles": 24,
     "presets": [
       {
         "id": "alberta",

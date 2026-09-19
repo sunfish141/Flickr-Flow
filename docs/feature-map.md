@@ -42,10 +42,17 @@ unavailable.
 
 Playback stores the most recent 128 complete frames. Scrubbing pauses requests;
 resuming traverses saved frames before extending the simulation. Pause, reset,
-source changes and hiding the tab discard pending results without clearing the
-last completed frame. Reset clears the scenario. Provider failures retain the
+and source changes discard pending results without clearing the last completed
+frame. Hiding the tab pauses playback while explicit fire placement and FIRMS
+loading continue. Busy landscape requests retry automatically; Pause cancels
+the load and its retries. Reset clears the scenario. Provider failures retain the
 last completed frame; rate-limited FIRMS requests show a bounded retry countdown.
 Historical comparison advances 24 hours per frame and stops at the final day.
+
+Road/fuel tiles and their prepared spread graphs stay in bounded memory caches.
+Startup prepares the regional examples and recent retained tiles before serving
+requests. Expanding fires reuse existing geometry and add only new tile graphs
+and their connections. New, uncached areas can still take longer to prepare.
 
 The map retains full scenario state while grouping dense markers for display.
 The searchable cell list pages through every cell, including observations whose

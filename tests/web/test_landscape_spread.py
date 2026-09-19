@@ -132,6 +132,45 @@ class ExpandingTests(unittest.TestCase):
         self.local.expanding = self.scenarios
         self.local.close()
         self.assertTrue(self.store.closed)
+        self.assertFalse(self.scenarios.models)
+        self.assertFalse(self.scenarios.tile_models)
+
+    def test_switching_regions_and_expansion_reuse_prepared_tile_graphs(self):
+        builds = []
+        original = LocalSpreadModel.__init__
+        def counted(model, *args, **kwargs):
+            original(model, *args, **kwargs)
+            builds.append(model.sampler.sha256)
+        with patch.object(LocalSpreadModel, '__init__', counted):
+            first = self.seed()
+            other = [self.first.to_geo.transform(31555, 31555)]
+            self.scenarios.initialize(other, self.origin)
+            self.assertEqual(self.seed(), first)
+            self.assertEqual(len(builds), 2)
+            advanced = self.step(first)
+            self.assertEqual(len(builds), 3)  # Only the new neighbor tile is constructed.
+            self.assertEqual(self.step(first), advanced)
+            self.assertEqual(len(builds), 3)
+
+    def test_cache_eviction_respects_patch_and_entry_budgets(self):
+        from collections import OrderedDict
+        from types import SimpleNamespace
+        cache = OrderedDict()
+        for i in range(4):
+            self.scenarios.retain(cache, i, SimpleNamespace(patches=[None]*3), max_entries=3, max_patches=7)
+        self.assertEqual(list(cache), [2,3])
+        self.scenarios.retain(cache, 4, SimpleNamespace(patches=[]), max_entries=2, max_patches=7)
+        self.assertEqual(list(cache), [3,4])
+
+    def test_startup_warms_examples_without_creating_an_incident(self):
+        self.store.data_root = Path(self.temp.name)
+        self.scenarios.prewarm_tiles = 2
+        lon, lat = self.coordinates[0]
+        self.scenarios.warm([{'example_ignition': {'longitude': lon, 'latitude': lat}}])
+        self.assertEqual(len(self.scenarios.tile_models), 1)
+        self.assertEqual(len(self.scenarios.models), 0)
+        with patch.object(LocalSpreadModel, '__init__', side_effect=AssertionError('Already prepared')):
+            self.assertEqual(self.seed()['active_patch_count'], 1)
 
 
 class ExpandingApiTests(unittest.TestCase):
@@ -188,11 +227,15 @@ class ExpandingApiTests(unittest.TestCase):
     def test_busy_and_failed_preparation_are_explicit_and_retryable(self):
         self.local.lock.acquire()
         try:
-            self.assertEqual(self.client.post('/api/landscape/firms',json=self.bounds).status_code,503)
+            response = self.client.post('/api/landscape/firms',json=self.bounds)
+            self.assertEqual(response.status_code,503)
+            self.assertEqual(response.headers['retry-after'], '2')
         finally:
             self.local.lock.release()
         self.store.fail=True
-        self.assertEqual(self.client.post('/api/landscape/firms',json=self.bounds).status_code,503)
+        response = self.client.post('/api/landscape/firms',json=self.bounds)
+        self.assertEqual(response.status_code,503)
+        self.assertNotIn('retry-after', response.headers)
         self.store.fail=False
         self.assertEqual(self.client.post('/api/landscape/firms',json=self.bounds).status_code,200)
 

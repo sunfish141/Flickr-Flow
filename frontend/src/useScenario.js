@@ -47,13 +47,18 @@ export function useScenario() {
   useEffect(() => {
     const hide = () => {
       if (!document.hidden) return;
-      pause();
+      // Explicit source loading survives a tab switch. Cancel only playback
+      // advancement, whose automatic continuation should pause while hidden.
+      setPlaying(false);
+      if (requests.current.active?.kind.endsWith('step')) pause();
     };
     document.addEventListener('visibilitychange', hide);
     return () => document.removeEventListener('visibilitychange', hide);
   }, [pause]);
   const request = useCallback((kind, body, onSuccess) => requests.current.run(
-    kind, signal => api(`/api/${kind}`, body, signal), {
+    kind, signal => api(`/api/${kind}`, body, signal, {
+      onRetry: () => message('Waiting for landscape preparation to finish. This request will retry automatically; you can cancel with Pause.'),
+    }), {
       onBusy: setBusy,
       onSuccess,
       onError: error => {
