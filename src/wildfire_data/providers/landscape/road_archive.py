@@ -49,7 +49,7 @@ def admit(root, amount):
 
 
 @lru_cache(maxsize=64)
-def verify_partition(path, size, modified_ns, checksum):
+def verify_partition(path, size, modified_ns, changed_ns, checksum):
     if sha256_file(Path(path)) != checksum:
         raise ValueError('Road archive partition checksum mismatch')
 
@@ -75,26 +75,77 @@ class RoadArchive:
         for p in m['partitions']:
             if p['path'] and (self.path.parent/p['path']).resolve().parent!=self.path.parent:
                 raise ValueError('Road archive partition path escapes archive')
+        self.preloaded = {}
 
-    def features(self, bounds):
+    def partitions(self, bounds):
+        """Keep coverage and file-integrity checks on memory hits, too."""
         bounds=checked_bounds(bounds)
-        if not box(*self.manifest['bounds']).covers(box(*bounds)) or not self.coverage.covers(box(*bounds)):
+        area = box(*bounds)
+        if not box(*self.manifest['bounds']).covers(area) or not self.coverage.covers(area):
             raise ValueError('Requested area is outside offline road archive coverage')
         selected=[]
         for p in self.manifest['partitions']:
-            if not p['rows'] or not box(*p['bounds']).intersects(box(*bounds)):
+            if not p['rows'] or not box(*p['bounds']).intersects(area):
                 continue
             path=self.path.parent/p['path']
             stat=path.stat()
-            verify_partition(str(path),stat.st_size,stat.st_mtime_ns,p['sha256'])
+            verify_partition(str(path),stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns,p['sha256'])
             selected.append(str(path))
+        return selected
+
+    @property
+    def memory_bytes(self):
+        return sum(item['bytes'] for item in self.preloaded.values())
+
+    def preload(self, name, bounds, *, max_bytes):
+        """Retain compact Arrow buffers; decode only roads intersecting a tile.
+
+        The budget covers retained buffers across all regions. A failed preload
+        never publishes a partial region or changes the on-demand fallback.
+        Reader batches/temporary decompression buffers also require some RAM.
+        """
+        bounds = checked_bounds(bounds)
+        selected = self.partitions(bounds)
+        batches, size = [], 0
+        existing = self.preloaded.get(name)
+        retained = self.memory_bytes - (existing['bytes'] if existing else 0)
+        if selected:
+            dataset = ds.dataset(selected, format='parquet')
+            for batch in dataset.to_batches(filter=bbox_filter(bounds), batch_size=8192,
+                    batch_readahead=1, fragment_readahead=1, use_threads=False):
+                if not batch.num_rows:
+                    continue
+                size += batch.get_total_buffer_size()
+                if retained + size > max_bytes:
+                    raise ValueError('Regional road preload exceeds the configured RAM buffer budget')
+                batches.append(batch)
+            table = pa.Table.from_batches(batches, schema=dataset.schema)
+        else:
+            table = None
+        self.preloaded[name] = {'bounds': bounds, 'table': table, 'bytes': size}
+        return {'bounds': list(bounds), 'rows': table.num_rows if table is not None else 0,
+                'bytes': size, 'status': 'ready'}
+
+    def close(self):
+        self.preloaded.clear()
+
+    def features(self, bounds):
+        bounds = checked_bounds(bounds)
+        selected = self.partitions(bounds)
         if not selected:
             return
-        dataset=ds.dataset(selected,format='parquet')
+        area = box(*bounds)
+        cached = next((item for item in self.preloaded.values() if box(*item['bounds']).covers(area)), None)
+        if cached is not None:
+            if cached['table'] is None:
+                return
+            dataset = ds.dataset(cached['table'])
+        else:
+            dataset = ds.dataset(selected,format='parquet')
         for batch in dataset.to_batches(filter=bbox_filter(bounds),batch_size=4096):
             for row in batch.to_pylist():
                 geometry=shapely.from_wkb(row.pop('geometry'))
-                if geometry.intersects(box(*bounds)):
+                if geometry.intersects(area):
                     yield {'type':'Feature','geometry':mapping(geometry),'properties':row}
 
     def extract(self, bounds, directory, data_root, *, max_bytes=100_000_000):
@@ -126,6 +177,5 @@ class RoadArchive:
                  availability_basis='offline pinned archive; tile extraction does not change capture time')
         save_json(path,m,data_root)
         return path
-
 
 

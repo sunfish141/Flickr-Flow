@@ -164,7 +164,13 @@ class LocalSpreadModel:
         self.center_xy = shapely.get_coordinates(self.centers).tolist()
         self.patch_areas = shapely.area(self.tree.geometries).tolist()
         boundary = self.sampler.bounds.boundary
-        self.boundary_distances = shapely.distance(self.tree.geometries, boundary)
+        # Scattered domains have many distant boundary rings. Query the nearest
+        # ring rather than comparing every patch against the whole multiline.
+        boundary_tree = STRtree(shapely.get_parts(boundary))
+        pairs, distances = boundary_tree.query_nearest(self.tree.geometries,
+            all_matches=False, return_distance=True)
+        self.boundary_distances = np.full(len(self.patches), np.inf)
+        self.boundary_distances[pairs[0]] = distances
         self.boundary_ids = np.flatnonzero(self.boundary_distances < 1e-6).tolist()
         self.perimeter_cells = {}
         sampler, policy = self.sampler, self.policy
@@ -225,7 +231,9 @@ class LocalSpreadModel:
         model = cls.__new__(cls)
         model.sampler, model.policy, model.mesh_m = sampler, policy, mesh_m
         model.identity = hashlib.sha256(f'{LOCAL_VERSION}:{sampler.sha256}:{policy.identity}:{mesh_m}'.encode()).hexdigest()
-        model.road_surface = unary_union([c.road_surface for c in components])
+        # Global road buffers are used only for optional spotting; normal
+        # propagation already respects each component's exact road cuts.
+        model._road_surfaces = tuple(c.road_surface for c in components)
         model.patches, model.centers, model.adjacency = [], [], []
         owners, boundary_ids = [], []
         for owner, component in enumerate(components):
@@ -245,6 +253,10 @@ class LocalSpreadModel:
             model._connect((left[cross], right[cross]))
         model._runtime()
         return model
+
+    @cached_property
+    def road_surface(self):
+        return unary_union(self._road_surfaces)
 
     @cached_property
     def satellite_representatives(self):

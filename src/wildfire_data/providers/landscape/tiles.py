@@ -47,6 +47,8 @@ class LandscapeTiles:
         self.reader_stack.close()
         self.readers.clear()
         self.samplers.clear()
+        if hasattr(self, 'archive'):
+            self.archive.close()
 
     @staticmethod
     def signature(path, manifest):
@@ -98,18 +100,19 @@ class LandscapeMosaic(FuelBarrierSampler):
         self.sha256 = hashlib.sha256(json.dumps([s.sha256 for s in samplers]).encode()).hexdigest()
         self.to_geo, self.to_grid = first.to_geo, first.to_grid
         self.manifest = {'roads_coverage': 'complete-extract', 'distance_radius_m': 5000.}
-        groups, roads = {}, {}
+        self.cover, roads = [], {}
         for s in samplers:
-            for geom, props in s.cover:
-                groups.setdefault(props['fuel'], []).append(geom)
+            # Aligned tiles have disjoint interiors. Keep their cover geometries
+            # spatially indexed instead of dissolving each fuel across distant
+            # fires and re-clipping that huge geometry for every inspected cell.
+            self.cover.extend(s.cover)
             for geom, props in s.roads:
                 key = json.dumps(props, sort_keys=True)
                 roads.setdefault(key, []).append(geom)
-        self.cover = [(unary_union(geoms), {'fuel': fuel}) for fuel, geoms in sorted(groups.items())]
         # Halo lines are duplicates across tiles. Dissolve by source attributes.
         self.roads = [(unary_union(geoms), json.loads(key)) for key, geoms in sorted(roads.items())]
-        self.cover_union = unary_union([g for g, _ in self.cover])
+        self.cover_union = unary_union([s.cover_union for s in samplers])
         self.cover_tree = STRtree([g for g, _ in self.cover])
         self.road_tree = STRtree([g for g, _ in self.roads])
-        from functools import lru_cache
-        self._sample = lru_cache(maxsize=8192)(self._sample)
+        self.urban_tree = STRtree([g for g, p in self.cover if p['fuel'] == 'urban'])
+        self._sample_cache = OrderedDict()

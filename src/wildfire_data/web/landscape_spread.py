@@ -28,6 +28,12 @@ class LandscapeLimits(Input):
     max_patches: int = Field(default=1500000, ge=1, le=5000000, strict=True)
 
 
+class LandscapePreload(Input):
+    preload_regions: list[str] = Field(default_factory=list, max_length=8)
+    road_cache_mb: int = Field(default=1024, ge=1, le=4096, strict=True)
+    prewarm_tiles: int = Field(default=0, ge=0, le=MAX_REQUEST_TILES, strict=True)
+
+
 class TileInput(Input):
     x: int = Field(ge=-4000, le=4000, strict=True)
     y: int = Field(ge=-4000, le=4000, strict=True)
@@ -85,6 +91,10 @@ class ExpandingScenarios:
     def __init__(self, config, config_path, local):
         self.local = local
         self.limits = LandscapeLimits(**{key: config[key] for key in LandscapeLimits.model_fields if key in config})
+        self.preload = LandscapePreload(**{key: config[key] for key in LandscapePreload.model_fields if key in config})
+        if set(self.preload.preload_regions) - {p['id'] for p in config.get('presets', [])}:
+            raise ValueError('Unknown landscape preload region; use a configured preset ID')
+        self.preloaded_regions = {}
         parent = Path(config_path).resolve().parent
         archive = parent/config['road_archive'] if config.get('road_archive') else None
         self.store = LandscapeTiles(parent/config['source_config'], parent/config['data_root'], config['release'],
@@ -94,18 +104,24 @@ class ExpandingScenarios:
         self.profile = hashlib.sha256(f'expanding/v2:{LOCAL_VERSION}:{self.store.identity}:{local.policy.identity}:{local.mesh_m}'.encode()).hexdigest()
         self.to_grid = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
         self.tile_models, self.models = OrderedDict(), OrderedDict()
-        self.prewarm_tiles = min(24, max(0, int(config.get('prewarm_tiles', 0))))
+        self.prewarm_tiles = min(self.limits.max_tiles, self.preload.prewarm_tiles)
         self.hybrid = None
 
     def configuration(self):
         return {**self.limits.model_dump(), 'max_area_km2': self.limits.max_tiles * (TILE_METRES / 1000)**2}
+
+    def preload_status(self):
+        return {'road_cache_mb': self.preload.road_cache_mb,
+                'regions': dict(self.preloaded_regions), 'prewarm_tiles': self.prewarm_tiles,
+                'prepared_tile_graphs': len(self.tile_models)}
 
     @staticmethod
     def retain(cache, key, model, *, max_entries, max_patches):
         cache[key] = model
         cache.move_to_end(key)
         while len(cache) > max_entries or sum(len(m.patches) for m in cache.values()) > max_patches:
-            cache.popitem(last=False)
+            _, evicted = cache.popitem(last=False)
+            evicted.clear_arrivals()  # Break model -> hybrid search -> model cycles immediately.
 
     def tile_model(self, sampler):
         key = sampler.sha256
@@ -132,17 +148,31 @@ class ExpandingScenarios:
                 components.append(component)
             model = LocalSpreadModel.join(LandscapeMosaic(ordered), self.local.policy,
                 components, mesh_m=self.local.mesh_m, max_patches=self.limits.max_patches)
-            self.retain(self.models, key, model, max_entries=8, max_patches=2*self.limits.max_patches)
+            self.retain(self.models, key, model, max_entries=2, max_patches=self.limits.max_patches)
             return model
         self.models.move_to_end(key)
         return self.models[key]
 
     def warm(self, presets):
         """Prepare examples and recent retained tiles before accepting requests."""
-        if not self.prewarm_tiles:
-            return
         import logging
         logger = logging.getLogger('uvicorn.error')
+        for preset in presets:
+            if preset.get('id') not in self.preload.preload_regions:
+                continue
+            name = preset['id']
+            logger.info('Preloading %s roads into RAM', name)
+            try:
+                self.preloaded_regions[name] = self.store.archive.preload(name, preset['bounds'],
+                    max_bytes=self.preload.road_cache_mb * 1024**2)
+                state = self.preloaded_regions[name]
+                logger.info('Prepared %s roads: %d records, %.1f MiB', name, state['rows'], state['bytes']/1024**2)
+            except (ValueError, OSError):
+                self.preloaded_regions[name] = {'status': 'fallback',
+                    'detail': 'Regional preload failed; verified local files remain available on demand. Check startup logs.'}
+                logger.exception('Could not preload %s roads; using local queries', name)
+        if not self.prewarm_tiles:
+            return
         keys = []
         for preset in presets:
             point = preset.get('example_ignition')
@@ -155,11 +185,13 @@ class ExpandingScenarios:
             if key not in keys:
                 keys.append(key)
         logger.info('Warming %d landscape tiles in memory', min(len(keys), self.prewarm_tiles))
-        for key in reversed(keys[:self.prewarm_tiles]):
+        for index, key in enumerate(reversed(keys[:self.prewarm_tiles]), 1):
             try:
                 self.tile_model(self.store.load(key))
             except (ValueError, OSError):
                 logger.exception('Could not prewarm landscape tile %s', key)
+            if index % 16 == 0:
+                logger.info('Landscape warmup: %d/%d tiles checked', index, min(len(keys), self.prewarm_tiles))
         logger.info('Prepared %d landscape tile graphs in memory', len(self.tile_models))
 
     def close(self):

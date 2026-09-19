@@ -1,5 +1,79 @@
 # Reconstruction verification
 
+## Regional preload and scattered-fire performance
+
+The new preload retains the full Alberta/Colorado preset road extracts (866,280
+and 1,298,633 records) in approximately 961 MiB of Arrow buffers. Three real
+queries covering rural Alberta, Edmonton and Boulder returned identical road
+records from files and RAM. First file queries took 0.12–0.32 seconds; RAM queries
+took 0.03–0.09 seconds, including decoding and exact intersection checks. The
+first queries include partition verification; they are not isolated disk-I/O
+measurements. The preload-only process peaked at about 1.83 GiB RSS, including
+temporary read/decompression buffers and libraries.
+
+The scattered-fire benchmark uses 16 fixed satellite-style seeds spaced 10 km
+apart around the Alberta example, retained 30 m vegetation/roads, the trained
+weather blend and the same pinned forecast. It does not call live NASA or fetch
+new weather. Before this change, steps reaching 343 and 431 burned cells took
+about 38 seconds each, with 97 and 107 tiles. The latter used about 7.5 seconds
+constructing new tile graphs and 7.5 seconds constructing response data, versus
+0.47 seconds extracting roads. These are inclusive timing categories, not an
+additive breakdown; graph assembly also includes tile graph construction.
+
+With both implementations starting from the same saved 48-hour state, warmed
+starting graph and already retained tile files, the next two steps improved
+without additional regional/tile preload:
+
+| Burned cells | Tiles | Before | After |
+| --- | --- | --- | --- |
+| 168 | 65 | 30.18 s | 25.60 s |
+| 225 | 76 | 25.41 s | 19.19 s |
+
+Response construction fell from 2.22/3.05 seconds to 0.41/0.58 seconds. These
+measurements run sequentially in separate processes with four OpenMP/OpenBLAS
+threads; they exclude initial restoration, startup, network and HTTP work.
+
+Next, the optimized process preloaded both regional road tables and warmed 128
+recently generated tiles. This took another 47.84 seconds with 76 tiles already
+prepared. All tiles needed by the following steps were then resident:
+
+| Burned cells | Tiles | Original, new tiles prepared during step | Optimized, tiles prewarmed |
+| --- | --- | --- | --- |
+| 281 | 84 | 28.84 s | 10.72 s |
+| 343 | 97 | 37.95 s | 13.54 s |
+| 431 | 107 | 38.00 s | 16.30 s |
+
+This second comparison includes moving tile construction out of the request;
+it is a repeat-area preload result, not a promise for previously unseen tiles.
+Per-step tile loading then cost about 2 ms and no tile graphs were rebuilt.
+The optimized process peaked at 5.74 GiB RSS including regional roads and all
+128 warmed graphs. Warmup is useful, but keeping entire province/state travel
+meshes in RAM would be a different, far larger allocation.
+All five compared frames preserved identical scenario state, cell data, roads
+and metadata. Active and burned perimeter symmetric differences were zero.
+Local timing reports and the equality report are retained under
+`artifacts/landscape-performance/regional-preload/` (ignored generated artifacts).
+
+Cache regressions cover complete coverage/fallback, source corruption on RAM
+hits (including same-size/same-mtime replacement), atomic rejection at the
+shared memory budget, and release on shutdown. Geometry regressions compare
+indexed nearest distances, tiled versus dissolved vegetation coverage, boundary
+distances and lazy road surfaces with exact reference operations. Evicted
+hybrid searches and sampled mosaics release without waiting for cyclic GC.
+The full Python behavior/API suite passed: **199 tests**.
+The restarted app reported both regional road caches ready and 128 prepared
+tile graphs. Chromium checks passed for real Alberta/Colorado seeds, expansion
+and rendered roads/perimeters, plus isolated live/historical FIRMS routing
+fixtures, with no JavaScript errors. Browser results are in
+`artifacts/regional-landscape/browser/verification.json`.
+
+Startup warming moves preparation earlier for previously generated tiles.
+Unseen areas still require native tile construction, and the whole province's
+30 m travel graph is not resident. These are computational checks, not evidence
+of forecast accuracy or a latency guarantee for every location.
+
+## Earlier reconstruction checks
+
 Validated September 19, 2026 in this repository using Python 3.14.4, Node 24.18.1,
 Playwright 1.62.0 and its Chromium browser. The production bundle was rebuilt from
 the committed React sources.

@@ -85,6 +85,15 @@ Road/fuel tiles and their prepared spread graphs stay in bounded memory caches.
 Startup prepares the regional examples and recent retained tiles before serving
 requests. Expanding fires reuse existing geometry and add only new tile graphs
 and their connections. New, uncached areas can still take longer to prepare.
+The default now preloads all retained roads within the Alberta and Colorado
+preset bounds into RAM and warms up to 128 previously generated tiles. Server
+configuration can select either region, adjust the memory budget, or disable
+preloading. Readiness and fallback status appear in `/api/config`; see
+[preload configuration](startup-data.md#landscape-memory-preparation).
+Vegetation rasters retain their existing reader/block cache, while complete
+province/state travel meshes remain too large to keep in memory. Exact spatial
+queries and smaller caches of assembled scenarios reduce scattered-fire CPU
+work and memory pressure without changing spread rules.
 Large-fire steps reuse unchanged burned-cell perimeter shapes and numeric patch
 geometry. Expansion renders once after all needed tiles have been added; it
 checks the evidence boundary without revisiting every burned patch. Both the

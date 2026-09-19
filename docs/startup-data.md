@@ -115,25 +115,53 @@ the 17 GB runtime archive.
 
 ## Landscape memory preparation
 
-Startup also warms the regional examples and recently generated native landscape
-tiles, controlled by `expanding.prewarm_tiles` in `config/local_spread.json`
-(default 24; zero disables it). Readiness waits for this work. Logs report the
-warmup and the number of prepared tile graphs. Subsequent placement and satellite
-initialization reuse those road-cut fuel patches and connections directly.
+`config/local_spread.json` now enables a regional road preload and a larger
+warmup of previously generated road/vegetation tile graphs:
+
+```json
+"preload_regions": ["alberta", "colorado"],
+"road_cache_mb": 1024,
+"prewarm_tiles": 128
+```
+
+These keys belong under `expanding`. Restart after editing them. Set
+`preload_regions` to `[]` to disable regional road loading, or retain only one
+preset ID. The retained Alberta and Colorado bounding-box extracts contain
+866,280 and 1,298,633 road records, respectively, using about 376 and 585 MiB of
+Arrow buffers. The shared budget caps those retained buffers; decompression,
+models and other application data need additional RAM. Roads stay compact in
+memory; only matching tile records are decoded into Python/geometry objects.
+Queries that cross a preload boundary use the verified local archive normally.
+Preload failures report a fallback in `/api/config` under `local_spread.preload`
+and in startup logs, without publishing an incomplete region.
+
+`prewarm_tiles` prepares the regional examples and most recently generated
+native tiles, bounded by `max_tiles` and the graph patch budget. Its default is
+now 128 instead of 24; zero disables graph warmup independently of road preload.
+Readiness waits for this work. Logs report progress every 16 tiles and the final
+number of prepared graphs; `/api/config` also reports that number. Subsequent
+placement and satellite initialization reuse these road-cut vegetation patches
+and connections directly. A larger warmup increases startup time in exchange
+for faster access to previously used areas.
 
 Verified tile samplers and prepared tile graphs are retained in memory, with
-128-entry limits and a 1.5-million-patch graph budget by default. Eight assembled
-models can retain at most 3 million patch references. Expansion reuses existing tile graphs
+128-entry limits and a 1.5-million-patch graph budget by default. Two assembled
+models share a 1.5-million-patch reference budget. Eviction clears hybrid search
+cycles; sampler caches release their geometry without waiting for cyclic garbage
+collection. Expansion reuses existing tile graphs
 and computes only cross-tile connections. Source changes invalidate cache hits;
 unknown cover and road barriers retain their original semantics. Native tile
 files persist; in-memory graphs rebuild after restart. New areas still require
-tile extraction and preparation, so startup does not promise instant access to
-every location in Colorado and Alberta.
+tile extraction and preparation. Vegetation uses the existing retained TIFF
+readers/block cache; full-region vegetation polygons and 30 m travel graphs are
+not materialized in RAM. A complete province/state travel mesh would require
+hundreds of millions of patches. Road preload therefore removes archive scans
+but does not promise instant simulation at every new location.
 
 `expanding.max_tiles` and `expanding.max_patches` control scenario capacity;
 restart after editing them. Sampler/tile cache capacity follows the tile limit
 (with a minimum of 48 entries); graph caches follow the patch limit, and assembled
-models share a budget twice that size. These are ceilings, not startup allocations.
+models share that same patch-reference budget. These are ceilings, not startup allocations.
 The default tile limit is over five times the former 216 km² limit. Supported
 configuration ranges are 1–512 tiles and 1–5,000,000 patches. Larger values need
 more RAM and preparation time; complex road cuts can reach the patch limit

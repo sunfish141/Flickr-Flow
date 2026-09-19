@@ -5,7 +5,7 @@ Road widths are source attributes or explicit scenario estimates, never facts
 inferred silently from a road's class. Urban cover remains a distinct mixture.
 """
 
-from functools import lru_cache
+from collections import OrderedDict
 import json
 import math
 from pathlib import Path
@@ -77,9 +77,10 @@ class FuelBarrierSampler:
             raise ValueError('Overlapping land-cover evidence')
         self.cover_tree = STRtree([g for g, _ in self.cover])
         self.road_tree = STRtree([g for g, _ in self.roads])
+        self.urban_tree = STRtree([g for g, p in self.cover if p['fuel'] == 'urban'])
         self.to_grid = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
         self.to_geo = Transformer.from_crs(TRAINING_GRID_CRS, 'EPSG:4326', always_xy=True)
-        self._sample = lru_cache(maxsize=8192)(self._sample)
+        self._sample_cache = OrderedDict()
 
     def eligible(self, cutoff_at, mode='as_of', *, roads=None):
         if mode not in ('as_of', 'retrospective'):
@@ -96,7 +97,14 @@ class FuelBarrierSampler:
         return True
 
     def sample_cell(self, cell_id, *, cutoff_at=None, mode='as_of'):
-        values = dict(self._sample(cell_id))
+        # An instance-owned bound-method lru_cache retains a reference cycle
+        # and can keep a large evicted mosaic alive until cyclic collection.
+        if cell_id not in self._sample_cache:
+            self._sample_cache[cell_id] = self._sample(cell_id)
+            if len(self._sample_cache) > 8192:
+                self._sample_cache.popitem(last=False)
+        self._sample_cache.move_to_end(cell_id)
+        values = dict(self._sample_cache[cell_id])
         if cutoff_at is not None:
             missing = empty_features()
             for roads in (False, True):
@@ -139,9 +147,9 @@ class FuelBarrierSampler:
         center = cell.centroid
         radius = self.manifest.get('distance_radius_m', 5000.)
         for kind in ('road', 'urban'):
-            objects = [g for g, p in (self.roads if kind == 'road' else self.cover)
-                       if kind == 'road' or p['fuel'] == 'urban']
-            distance = min((g.distance(center) for g in objects), default=math.inf)
+            tree = self.road_tree if kind == 'road' else self.urban_tree
+            nearest = tree.nearest(center)
+            distance = tree.geometries[nearest].distance(center) if nearest is not None else math.inf
             # An extract edge limits the distance we can establish. A mapped
             # object closer than that edge is still a valid nearest object.
             supported = min(radius, self.bounds.boundary.distance(center))

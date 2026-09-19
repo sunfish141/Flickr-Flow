@@ -85,6 +85,7 @@ class LocalScenarios:
             'weather_ml': self.expanding.hybrid.configuration() if self.expanding and self.expanding.hybrid else {'available': False},
             'expanding_error': self.expanding_error,
             'limits': self.expanding.configuration() if self.expanding else None,
+            'preload': self.expanding.preload_status() if self.expanding else None,
             'presets': self.presets,
             'regions': [{'id': key, 'label': label, 'bounds': s.manifest['bounds_wgs84'],
                 'road_count': s.manifest.get('road_count'), 'known_width_count': s.manifest.get('road_width_known_count')}

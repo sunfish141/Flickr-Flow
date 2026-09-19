@@ -22,7 +22,7 @@ independent of the old repository. Inspector and landscape sampling share the
 staged TIFF cache. See [startup data](startup-data.md).
 
 Detailed landscapes default to 128 verified tile samplers and 128 prepared tile
-graphs (at most 1.5 million patches), plus eight assembled models (at most 3 million
+graphs (at most 1.5 million patches), plus two assembled models (at most 1.5 million
 patch references). `expanding.max_tiles` and `expanding.max_patches` configure
 scenario capacity, validated before opening source archives. Cache ceilings grow
 with those limits; allocation remains demand-driven. The request schema admits
@@ -56,7 +56,7 @@ holes and all road-cut squares retain exact clipping, including stable patch
 IDs. These optimizations preserve model/profile identities and existing states.
 
 Before readiness, `expanding.prewarm_tiles` prepares regional example locations
-and recently generated native tiles, up to 24 by default. Set it to zero to
+and recently generated native tiles, up to 128 by default. Set it to zero to
 disable warmup. This moves graph construction into startup for retained areas;
 new areas still require preparation. The cache is bounded, rather than a mesh
 of the entire state/province. Derived tile files persist on disk; prepared
@@ -64,6 +64,24 @@ graphs are rebuilt into memory after restart. Cache eviction does not delete
 source files or change scenario state. Model v5 and expanding profile v2 require
 a fresh landscape scenario after upgrading. Class-specific polygon residence
 times are included in the policy identity.
+
+Regional road preloading retains complete preset bounding-box queries as compact
+Arrow tables, with a shared 1,024 MiB buffer budget by default. No per-road Python
+objects are retained. Tile queries filter those in-memory tables before decoding;
+coverage, partition signatures and changed-source checksums are checked on hits.
+Queries outside or crossing the preloaded bounds retain the file query path.
+Failed regions are not partially published, and config reports the fallback.
+These sources share the application's lifetime and clear on shutdown.
+
+Scattered mosaics keep disjoint tile cover geometries in their spatial index,
+so cell sampling avoids clipping a dissolved province-wide fuel polygon. Cover
+coverage still unions the verified per-tile coverage, preserving missingness.
+Road and urban distances use exact nearest-object spatial queries; patch-to-edge
+distances similarly index boundary rings. Joined road-surface buffers are formed
+only when accessed (optional spotting). Ordinary spread keeps all existing road
+cuts and cross-tile gates. Eviction clears searches that reference their owning
+model; explicit per-sampler LRU dictionaries avoid bound-method reference cycles.
+This preload/performance change preserves source, model and scenario identities.
 
 Polygon arrival searches resume Dijkstra only through the requested time,
 retaining tentative future arrivals and the pending queue. Each model keeps

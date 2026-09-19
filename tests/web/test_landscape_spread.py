@@ -265,9 +265,9 @@ class ExpandingTests(unittest.TestCase):
         from types import SimpleNamespace
         cache = OrderedDict()
         for i in range(4):
-            self.scenarios.retain(cache, i, SimpleNamespace(patches=[None]*3), max_entries=3, max_patches=7)
+            self.scenarios.retain(cache, i, SimpleNamespace(patches=[None]*3, clear_arrivals=lambda: None), max_entries=3, max_patches=7)
         self.assertEqual(list(cache), [2,3])
-        self.scenarios.retain(cache, 4, SimpleNamespace(patches=[]), max_entries=2, max_patches=7)
+        self.scenarios.retain(cache, 4, SimpleNamespace(patches=[], clear_arrivals=lambda: None), max_entries=2, max_patches=7)
         self.assertEqual(list(cache), [3,4])
 
     def test_startup_warms_examples_without_creating_an_incident(self):
@@ -279,6 +279,66 @@ class ExpandingTests(unittest.TestCase):
         self.assertEqual(len(self.scenarios.models), 0)
         with patch.object(LocalSpreadModel, '__init__', side_effect=AssertionError('Already prepared')):
             self.assertEqual(self.seed()['active_patch_count'], 1)
+
+    def test_regional_preload_runs_even_with_tile_warmup_disabled_and_reports_fallback(self):
+        from unittest.mock import Mock
+        self.store.archive = Mock()
+        self.store.archive.preload.side_effect = [{'status': 'ready', 'rows': 42, 'bytes': 2048}, ValueError('budget')]
+        self.scenarios.preload.preload_regions = ['alberta', 'colorado']
+        presets = [{'id': p, 'bounds': [-120,49,-110,60]} for p in ('alberta','colorado','other')]
+        with self.assertLogs('uvicorn.error', level='INFO'):
+            self.scenarios.warm(presets)
+        self.assertEqual(self.store.archive.preload.call_count, 2)
+        self.assertEqual(self.scenarios.preload_status()['regions']['alberta']['status'], 'ready')
+        self.assertEqual(self.scenarios.preload_status()['regions']['colorado']['status'], 'fallback')
+        self.local.expanding = self.scenarios
+        self.assertEqual(self.local.configuration()['preload'], self.scenarios.preload_status())
+        self.assertFalse(self.scenarios.models)
+        self.assertFalse(self.scenarios.tile_models)
+
+    def test_preload_configuration_is_validated_and_does_not_change_physics(self):
+        config = {'source_config': 'sources.json', 'data_root': 'data', 'release': 'test'}
+        for invalid in ({'prewarm_tiles': -1}, {'prewarm_tiles': True}, {'road_cache_mb': 0},
+                        {'road_cache_mb': 4097}, {'preload_regions': ['unknown']}):
+            with self.subTest(invalid=invalid), patch('wildfire_data.web.landscape_spread.LandscapeTiles') as store:
+                with self.assertRaises(ValueError):
+                    ExpandingScenarios({**config, **invalid}, Path(self.temp.name)/'config.json', self.local)
+                store.assert_not_called()
+        with patch('wildfire_data.web.landscape_spread.LandscapeTiles', return_value=self.store):
+            other = ExpandingScenarios({**config, 'prewarm_tiles': 100}, Path(self.temp.name)/'config.json', self.local)
+            self.assertEqual(other.prewarm_tiles, 100)
+            self.assertEqual(other.profile, self.scenarios.profile)
+
+    def test_eviction_releases_hybrid_search_model_cycles(self):
+        from collections import OrderedDict
+        from types import SimpleNamespace
+        import gc
+        import weakref
+        model = self.scenarios.model({(0,0): self.first})
+        model.hybrid_searches['test'] = SimpleNamespace(model=model)
+        reference = weakref.ref(model)
+        cache = OrderedDict([(0,model)])
+        self.scenarios.models.clear()
+        del model
+        gc.disable()
+        try:
+            fresh = self.scenarios.tile_model(self.first)
+            self.scenarios.retain(cache, 1, fresh, max_entries=1, max_patches=100000)
+            self.assertIsNone(reference())
+        finally:
+            gc.enable()
+
+    def test_scattered_boundaries_and_lazy_road_surface_match_exact_geometry(self):
+        import numpy as np
+        import shapely
+        self.store.roads = [(LineString([(1500,-100),(1500,4000)]), {})]
+        samplers = {(x,0): self.store.load((x,0)) for x in (0,1,20)}
+        model = self.scenarios.model(samplers)
+        self.assertNotIn('road_surface', model.__dict__)
+        expected = shapely.distance(model.tree.geometries,model.sampler.bounds.boundary)
+        np.testing.assert_allclose(model.boundary_distances, expected, rtol=0, atol=1e-8)
+        surfaces = [self.scenarios.tile_model(s).road_surface for s in samplers.values()]
+        self.assertTrue(model.road_surface.equals(unary_union(surfaces)))
 
 
 class ExpandingApiTests(unittest.TestCase):
