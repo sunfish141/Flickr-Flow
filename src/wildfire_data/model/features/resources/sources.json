@@ -1,0 +1,26 @@
+{
+  "version": "5.1.2",
+  "license": "Public domain",
+  "bounds": [
+    -179,
+    24,
+    -50,
+    84
+  ],
+  "derivation": "Shapely make_valid; intersect with bounds; retain polygon parts; preserve coordinates; strip attributes except land/lake kind; compact JSON; gzip mtime=0.",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_land.geojson",
+      "sha256": "1ac90796408bc6ad6911d69448485d3c4dbf2190370080368a09976e1c9f7416"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_lakes.geojson",
+      "sha256": "2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_lakes_north_america.geojson",
+      "sha256": "76f49d4b698f3529e690136a989713bcd3c028ade150346f4b358de9815cfc43"
+    }
+  ],
+  "artifact_sha256": "c1cdb80ea71d0f384bb7906fe4d5456d88942d8cf061b3998042df0030024621"
+}

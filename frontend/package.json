@@ -1,0 +1,20 @@
+{
+  "name": "wildfire-atlas-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "leaflet": "1.9.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "esbuild": "^0.28.1"
+  }
+}
