@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 import logging
 from threading import Lock
+import json
 
 from fastapi import HTTPException
 
@@ -10,6 +11,8 @@ from wildfire_data.model.loading import load_pass_model
 from wildfire_data.model.features.landscape import Landscape
 from wildfire_data.model.features.terrain_features import TerrainFeatureSampler
 from wildfire_data.model.spread import FireSpreadModel
+from wildfire_data.core.model_artifacts import PUBLIC_MODEL_KIND, public_artifact
+from wildfire_data.providers.terrain_csv import CSVTerrainProvider
 from wildfire_data.web.historical_firms import HistoricalFirmsStore
 from wildfire_data.web.local_spread import LocalScenarios
 from wildfire_data.web.vegetation import load_inspector_sampler
@@ -34,6 +37,7 @@ class Runtime:
         self.firms_cache = {}
         self.firms_last_fetch = None
         self.model_error = None
+        self.public_model = False
         self.local_scenarios = LocalScenarios(None)
 
     def start(self):
@@ -47,11 +51,17 @@ class Runtime:
             except Exception:
                 logger.warning('Historical archive unavailable')
         try:
+            if self.model is None:
+                self.public_model = json.loads(self.settings.run_manifest.read_text()).get('kind') == PUBLIC_MODEL_KIND
             fitted = self.model or load_pass_model(self.settings.run_manifest, self.settings.pass_name)
             self.model = FireSpreadModel.from_incident_model(fitted, self.landscape or Landscape())
             if self.terrain is None:
-                sampler = TerrainFeatureSampler(self.settings.data_root, max_cached_blocks=4)
-                self.terrain = lru_cache(maxsize=8192)(sampler.sample_cell)
+                if self.public_model and not (self.settings.data_root / 'static/etopo-2022-15s').exists():
+                    path, _ = public_artifact(self.settings.run_manifest, 'terrain.csv')
+                    self.terrain = CSVTerrainProvider(path)
+                else:
+                    sampler = TerrainFeatureSampler(self.settings.data_root, max_cached_blocks=4)
+                    self.terrain = lru_cache(maxsize=8192)(sampler.sample_cell)
         except Exception:
             logger.error('Model initialization failed; verify configured artifacts')
             self.model_error = 'Model unavailable. Check WILDFIRE_RUN_MANIFEST and WILDFIRE_DATA_ROOT on the server.'

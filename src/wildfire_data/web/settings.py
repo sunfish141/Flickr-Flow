@@ -24,6 +24,8 @@ class Settings:
         default_assets = root.parent if (root.parent / 'data').is_dir() else root
         assets = Path(os.getenv('WILDFIRE_ASSET_ROOT', str(default_assets))).resolve()
         run = assets / 'artifacts/incident-two-pass-recovered-20260907-boreal/run_manifest.json'
+        if (root / 'artifacts/public-csv/run_manifest.json').is_file():
+            run = root / 'artifacts/public-csv/run_manifest.json'
         return cls(
             run_manifest=Path(os.getenv('WILDFIRE_RUN_MANIFEST', str(run))),
             data_root=Path(os.getenv('WILDFIRE_DATA_ROOT', str(assets / 'data'))),

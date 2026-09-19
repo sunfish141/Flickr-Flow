@@ -6,6 +6,7 @@ from pathlib import Path
 import joblib
 
 from wildfire_data.core.hashing import sha256_file
+from wildfire_data.core.model_artifacts import PUBLIC_MODEL_KIND, public_artifact
 from wildfire_data.model.incident_transition import INCIDENT_TRANSITION_VERSION, IncidentTransitionModel
 from wildfire_data.model.recursive_transition import RECURSIVE_MODEL_FEATURE_COLUMNS, SyntheticObservationCalibration
 from wildfire_data.model.features.schema import feature_set_for_columns, validate_feature_contract
@@ -15,6 +16,17 @@ from wildfire_data.model.features.vegetation_features import VegetationFeatureSa
 def load_pass_model(run_manifest_path: Path, pass_name="pass_2"):
     """Load a trusted local fitted bundle only through its completed run manifest."""
     manifest = json.loads(run_manifest_path.read_text())
+    if manifest.get('kind') == PUBLIC_MODEL_KIND:
+        path, manifest = public_artifact(run_manifest_path, 'frontier.joblib')
+        bundle = joblib.load(path)
+        features = tuple(bundle['feature_columns'])
+        if features != tuple(RECURSIVE_MODEL_FEATURE_COLUMNS) or list(features) != manifest['frontier_features']:
+            raise ValueError('Public CSV frontier feature contract mismatch')
+        if tuple(bundle['model'].columns) != features:
+            raise ValueError('Estimator feature order differs from the model contract')
+        return IncidentTransitionModel(bundle['model'], feature_columns=features,
+            observation_calibration=SyntheticObservationCalibration(**bundle['observation_calibration']),
+            ignition_threshold=bundle['ignition_threshold'])
     if manifest.get("kind") != "completed-incident-two-pass-training-run" or manifest.get("status") != "complete":
         raise ValueError("model loading requires a completed two-pass run")
     if pass_name not in ("pass_1", "pass_2"):

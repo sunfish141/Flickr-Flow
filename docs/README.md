@@ -11,5 +11,11 @@ The application is being rebuilt incrementally from `recreate-project-prompt.md`
 3. Browser state: isolate timeline transitions and request invalidation, retain
    all map and source controls, and verify interactions with browser tests.
 
-Each milestone is tested before commit and push. Existing training data,
+The runtime and CSV-training milestones are complete. The model run uses the
+real public release; **74 Python tests pass**, saved-model evaluation reproduces
+all recorded scores, and real-model API replay is deterministic. See
+[model results](model-results.md), [architecture](architecture.md), and
+[feature availability](feature-map.md). The browser-state milestone is next.
+
+Each milestone is tested before commit; the user syncs it at the checkpoint. Existing training data,
 license, configurations, and the original application repository are preserved.
