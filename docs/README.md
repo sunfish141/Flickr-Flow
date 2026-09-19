@@ -2,6 +2,9 @@
 
 The application is being rebuilt incrementally from `recreate-project-prompt.md`.
 
+For a concise overview of the data sources, learned-model architecture and
+polygon algorithm, see the [hackathon project summary](hackathon-summary.md).
+
 1. Standalone runtime: retain the tested spatial/prediction algorithms and
    React views, separate FastAPI settings/resources/routes, relocate local
    source adapters into `providers/`, and exclude bulk collectors.
