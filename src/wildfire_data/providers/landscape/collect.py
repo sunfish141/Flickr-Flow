@@ -77,7 +77,7 @@ def rule_value(rules, position, default=None):
     return values[0] if values and all(v == values[0] for v in values) else default
 
 
-def normalize_roads(features, projected_bounds):
+def normalize_roads(features, projected_bounds, *, preserve_unknown_grade=False):
     project = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
     result, seen = [], set()
     for feature in features:
@@ -106,8 +106,9 @@ def normalize_roads(features, projected_bounds):
             flags = sorted({flag for rule in p.get('road_flags') or []
                 if (rule.get('between') or [0., 1.])[0] <= mid <= (rule.get('between') or [0., 1.])[1]
                 for flag in rule.get('values', rule.get('value')) or []})
-            level = rule_value(p.get('level_rules'), mid, 0)
-            elevated = level != 0 or any(f in flags for f in ('is_bridge', 'is_tunnel'))
+            level = rule_value(p.get('level_rules'), mid, None if preserve_unknown_grade else 0)
+            elevated = any(f in flags for f in ('is_bridge', 'is_tunnel')) or level is not None and level != 0
+            at_grade = False if elevated else None if level is None else True
             piece = substring(road, start, end, normalized=True).intersection(projected_bounds)
             parts = list(piece.geoms) if piece.geom_type == 'MultiLineString' else [piece]
             for j, part in enumerate(parts):
@@ -116,7 +117,7 @@ def normalize_roads(features, projected_bounds):
                 result.append({'type': 'Feature', 'geometry': mapping(part), 'properties': {
                     'id': f'{identity}:{start}:{j}', 'source_id': identity, 'class': p.get('class'),
                     'width_m': width, 'width_basis': 'provider' if width is not None else 'unknown',
-                    'surface': rule_value(p.get('road_surface'), mid), 'at_grade': not elevated,
+                    'surface': rule_value(p.get('road_surface'), mid), 'at_grade': at_grade,
                     'sources': p.get('sources'), 'flags': flags}})
     return {'type': 'FeatureCollection', 'features': result}
 

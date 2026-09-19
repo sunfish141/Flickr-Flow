@@ -1,0 +1,5 @@
+# Release metadata is checksummed byte-for-byte; Windows checkout must preserve LF.
+htn_training/*.md text eol=lf
+htn_training/*.json text eol=lf
+htn_training/SHA256SUMS text eol=lf
+htn_training/metadata/* text eol=lf

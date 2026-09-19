@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 
@@ -89,7 +90,12 @@ class RoadArchive:
                 continue
             path=self.path.parent/p['path']
             stat=path.stat()
-            verify_partition(str(path),stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns,p['sha256'])
+            # Windows Python currently reports creation time as st_ctime, so
+            # same-size corruption with restored mtime can reuse a stale key.
+            # Rehash there rather than claiming verified evidence from that
+            # key. Arrow preload still avoids repeated Parquet decoding.
+            verify = verify_partition.__wrapped__ if os.name == 'nt' else verify_partition
+            verify(str(path),stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns,p['sha256'])
             selected.append(str(path))
         return selected
 

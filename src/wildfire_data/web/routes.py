@@ -17,6 +17,7 @@ def register_routes(app, runtime):
     @app.get("/api/config")
     def config():
         return {"model_ready": runtime.model_error is None, "model_error": runtime.model_error,
+            "desktop": runtime.network_policy.status() if getattr(runtime, 'network_policy', None) else None,
             "local_spread": runtime.local_scenarios.configuration(),
             "model_name": ('Frontier CSV model' if runtime.public_model else f"Incident model · {runtime.settings.pass_name.replace('_', ' ')}"), "research_preview": True,
             "firms_configured": bool(runtime.settings.firms_key or runtime.firms_loader), "step_hours": 12,
@@ -41,7 +42,8 @@ def register_routes(app, runtime):
             state = current.initial_state(ignitions, origin_at=origin)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
-        return state_response(state, origin_at=origin)
+        missing = sum(runtime.terrain(cell_id).get('terrain_coverage_status') != 'sampled' for cell_id in ignitions)
+        return state_response(state, origin_at=origin, terrain_missing=missing)
 
     @app.post("/api/step")
     def step(body: StepInput):
@@ -106,7 +108,8 @@ def register_routes(app, runtime):
 
     @app.post("/api/firms")
     def firms(body: BoundsInput | None = None, landscape_mode: bool = False):
-        
+        if getattr(runtime, 'network_policy', None) and not runtime.network_policy.online:
+            raise HTTPException(503, 'No network connection is reported. Reconnect to request current detections; local simulations remain available.')
         current = None if landscape_mode else runtime.ready_model()
         bounds = (body.west, body.south, body.east, body.north) if body else DEFAULT_BOUNDS
         # Repeated clicks in the same view reuse a preview for five minutes.
@@ -123,6 +126,8 @@ def register_routes(app, runtime):
                 state, metadata = (runtime.firms_loader or fetch_current_firms)(runtime.settings.firms_key, bounds, now=now)
             except LiveFirmsError as exc:
                 raise HTTPException(502 if runtime.settings.firms_key or runtime.firms_loader else 503, str(exc)) from None
+            if getattr(runtime, 'network_policy', None) and not runtime.network_policy.online:
+                raise HTTPException(503, 'Online data was disabled during the request; result discarded.')
             cells = tuple(c for c in state.active_cells if current is None or current.landscape.allows_cell(c.cell_id))
             metadata = {**metadata, "water_cells_excluded": len(state.active_cells) - len(cells)}
             # Low satellite brightness does not mean an observed fire has no
@@ -149,6 +154,47 @@ def register_routes(app, runtime):
         except Exception:
             logging.getLogger(__name__).exception('Could not sample vegetation for the cell inspector')
             raise HTTPException(503, 'Vegetation information is temporarily unavailable.') from None
+
+    def regional_observations(bounds, day=None):
+        scenarios = runtime.local_scenarios
+        matches = []
+        for identity, (_, sampler) in scenarios.regions.items():
+            w, s, e, n = sampler.manifest['bounds_wgs84']
+            if max(w, bounds.west) < min(e, bounds.east) and max(s, bounds.south) < min(n, bounds.north):
+                matches.append((identity, BoundsInput(west=max(w, bounds.west), south=max(s, bounds.south),
+                                                    east=min(e, bounds.east), north=min(n, bounds.north))))
+        if len(matches) != 1:
+            raise HTTPException(422, 'Zoom to one installed region before loading a satellite ignition snapshot.')
+        identity, clipped = matches[0]
+        observed = (historical_firms(HistoricalFirmsInput(date=day, bounds=clipped), landscape_mode=True)
+                    if day else firms(clipped, landscape_mode=True))
+        if not scenarios.lock.acquire(blocking=False):
+            raise HTTPException(503, 'Local simulation is busy. Try again shortly.')
+        try:
+            model = scenarios.model(identity)
+            seeds, unsupported = set(), 0
+            for point in observed['points']:
+                try:
+                    seeds.update(model.seed_ids([(point['longitude'], point['latitude'])]))
+                except ValueError:
+                    unsupported += 1
+            if not seeds:
+                raise HTTPException(422, 'No detections map to supported fuel inside this installed region. The existing scenario is unchanged.')
+            result = scenarios.response(identity, model, tuple(sorted(seeds)), 0, datetime.fromisoformat(observed['origin_at']))
+            result['metadata'] = {**observed['metadata'], 'mapped_starting_cells': len(seeds),
+                'unsupported_observed_cells': unsupported, 'historical_snapshot': day.isoformat() if day else None,
+                'ignition_assumption': 'Fine ignition positions approximated from observed 1 km cell centres; hypothetical spread'}
+            return result
+        finally:
+            scenarios.lock.release()
+
+    @app.post('/api/map/firms')
+    def map_firms(body: BoundsInput):
+        return regional_observations(body)
+
+    @app.post('/api/map/firms/historical')
+    def map_historical_firms(body: HistoricalFirmsInput):
+        return regional_observations(body.bounds, body.date)
 
     from wildfire_data.web.landscape_spread import register_expanding_routes
     register_expanding_routes(app, lambda body: firms(body, landscape_mode=True),

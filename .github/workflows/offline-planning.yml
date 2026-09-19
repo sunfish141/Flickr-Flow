@@ -1,0 +1,72 @@
+name: Offline planning internal builds
+on:
+  workflow_dispatch:
+jobs:
+  engine-regression:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-planning-qa.lock
+      - run: python -m pytest tests/model/test_local_spread.py tests/providers/test_landscape_tiles.py tests/providers/test_planning_pack_normalization.py -q
+        env:
+          PYTHONPATH: src:tests
+  verify-and-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, macos-15-intel, macos-14, ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: src
+      PROJ_NETWORK: 'OFF'
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-planning*.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: python -m pip install -r requirements-planning-dev.lock
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build:planning
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: python -m pytest tests/planning -q --import-mode=importlib
+        env:
+          PYTHONPATH: src${{ runner.os == 'Windows' && ';' || ':' }}tests
+      # The vetted pack archive is a build input, never fetched by the app.
+      # Configure this repository variable to an immutable artifact URL whose
+      # SHA-256 is the reviewed checksum in PLANNING_PACKS_SHA256.
+      - name: Obtain reviewed pack build input
+        run: python scripts/obtain_planning_build_input.py
+        env:
+          PLANNING_PACKS_URL: ${{ vars.PLANNING_PACKS_URL }}
+          PLANNING_PACKS_SHA256: ${{ vars.PLANNING_PACKS_SHA256 }}
+      - run: python scripts/build_planning.py
+      - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+        working-directory: frontend
+      - run: python scripts/smoke_planning.py --frozen
+      - run: python scripts/verify_planning_exports.py
+      - name: Retain verification evidence, including failed smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planning-verification-${{ matrix.os }}-${{ runner.arch }}
+          path: artifacts/planning-smoke/frozen/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WildfirePlanner-UNSIGNED-${{ matrix.os }}-${{ runner.arch }}
+          path: dist/WildfirePlanner/

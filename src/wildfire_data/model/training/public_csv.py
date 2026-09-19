@@ -106,6 +106,17 @@ def evaluate(frame, provenance, frontier, weather):
     return result
 
 
+def fitting_cohort(frame, split, later_test_at):
+    """Keep complete development labels strictly before the later-time test."""
+    selected = cohort(frame, split, later_test_at=later_test_at)
+    ends = pd.to_datetime(selected.target_end_at, utc=True, format='mixed')
+    cutoffs = pd.to_datetime(selected.feature_cutoff_at, utc=True, format='mixed')
+    if ends.isna().any() or cutoffs.isna().any() or (ends <= cutoffs).any():
+        raise ValueError('Development labels must end after their feature cutoffs')
+    complete = ends < pd.Timestamp(later_test_at)
+    return selected.loc[complete], int((~complete).sum())
+
+
 def train(dataset, output):
     output = Path(output)
     if output.exists():
@@ -113,14 +124,15 @@ def train(dataset, output):
     print('Verifying the release and loading projected feature columns…', flush=True)
     frame, provenance = load_dataset(dataset)
     frame = derive_weather(frame)
-    training = cohort(frame, 'train', later_test_at=provenance['later_test_at'])
-    calibration = cohort(frame, 'calibration', later_test_at=provenance['later_test_at'])
+    training, excluded_training = fitting_cohort(frame, 'train', provenance['later_test_at'])
+    calibration, excluded_calibration = fitting_cohort(frame, 'calibration', provenance['later_test_at'])
     print(f'Fitting {len(training):,} frontier rows; calibrating {len(calibration):,} rows.', flush=True)
     output.mkdir(parents=True)
     protocol = {'kind': KIND, 'status': 'planned', 'parameters': PARAMETERS,
                 'frontier_threshold': .2, 'weather_threshold': .15,
                 'weather_probability_weight': .25, 'geometry_probability_weight': .75,
                 'selection': 'fixed reference policy; no holdout tuning or model search',
+                'excluded_boundary_labels': {'train': excluded_training, 'calibration': excluded_calibration},
                 'source': provenance, 'training_rows': len(training), 'calibration_rows': len(calibration),
                 'training_groups': sorted(training.incident_group_id.unique()),
                 'calibration_groups': sorted(calibration.incident_group_id.unique()),

@@ -45,7 +45,8 @@ async def main(base_url, latitude, longitude):
         await expect(page.locator('#status')).to_contain_text('Loaded')
         await page.screenshot(path=str(output/'coarse-firms.png'))
         # Auto polygon selection preserves the fitted, narrow satellite view.
-        await page.locator('#local-region').select_option('auto')
+        await page.locator('#local-region').click()
+        await page.locator('[role=option][data-value="auto"]').click()
         await asyncio.sleep(10.1)  # The server enforces ten seconds between new FIRMS queries.
         async with page.expect_response('**/api/landscape/firms', timeout=240000) as pending:
             await page.locator('#load-firms').click()

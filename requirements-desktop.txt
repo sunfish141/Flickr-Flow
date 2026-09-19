@@ -1,0 +1,23 @@
+# Full desktop runtime. Preserve the planner's numerical engine identity;
+# classifier reload/prediction parity is verified against the web environment.
+fastapi==0.141.1
+starlette==1.6.0
+pydantic==2.13.5
+uvicorn==0.52.4
+httpx==0.28.1
+numpy==2.5.3
+pandas==3.0.5
+scipy==1.18.1
+scikit-learn==1.9.0
+joblib==1.6.0
+threadpoolctl==3.6.0
+pyproj==3.8.0
+shapely==2.1.2
+rasterio==1.5.1
+pyarrow==25.0.1
+pyhdf==0.11.7
+requests==2.34.2
+python-dotenv==1.2.3
+Pillow==12.3.0
+platformdirs==4.11.11
+PySide6==6.10.2

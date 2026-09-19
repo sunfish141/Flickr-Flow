@@ -29,8 +29,10 @@ async def main(base_url):
         presets = {p['id']: p for p in config['local_spread']['presets']}
         assert set(presets) == {'alberta', 'colorado'}
         await expect(page.locator('#local-region')).to_be_visible()
-        await expect(page.locator('#local-region option[value="boulder"]')).to_have_count(0)
-        await expect(page.locator('#local-region option[value="edson"]')).to_have_count(0)
+        await page.locator('#local-region').click()
+        await expect(page.locator('[role=option][data-value="boulder"]')).to_have_count(0)
+        await expect(page.locator('[role=option][data-value="edson"]')).to_have_count(0)
+        await page.locator('#local-region').press('Escape')
         await page.locator('#help').click()
         await expect(page.locator('#help-dialog')).to_contain_text('Missing vegetation uses an explicit 24-hour fallback')
         durations = config['local_spread']['policy']['residence_minutes_by_fuel'].values()
@@ -45,7 +47,8 @@ async def main(base_url):
             old = next(r for r in config['local_spread']['regions'] if r['id'] == pilot)
             w, s, e, n = old['bounds']
             assert not (w <= example['longitude'] <= e and s <= example['latitude'] <= n)
-            await page.locator('#local-region').select_option(region)
+            await page.locator('#local-region').click()
+            await page.locator(f'[role=option][data-value="{region}"]').click()
             await expect(page.locator('#active-count')).to_have_text('0')
             await expect(page.locator('#elapsed')).to_have_text('+0 hours')
             await expect(page.locator('.map-title')).to_have_text(f'{region.upper()} · POLYGON SPREAD')
@@ -98,10 +101,11 @@ async def main(base_url):
         await page.locator('#show-basemap').uncheck()
         for region in ['colorado', 'alberta']:
             await page.locator('#place-tab').click()
-            await page.locator('#local-region').select_option(region)
+            await page.locator('#local-region').click()
+            await page.locator(f'[role=option][data-value="{region}"]').click()
             await page.locator('#firms-tab').click()
             await expect(page.get_by_text('Detailed scenarios support', exact=False)).to_contain_text('64 tiles (576 km²)')
-            await expect(page.locator('#local-region')).to_have_value(region)
+            await expect(page.locator('#local-region')).to_have_attribute('value', region)
             await expect(page.locator('#firms-scope')).to_have_value('view')
             await expect(page.locator('#firms-scope option[value="all"]')).to_have_js_property('disabled', True)
             for historical in [False, True]:
@@ -117,7 +121,7 @@ async def main(base_url):
                 assert bounds['west'] <= w and bounds['south'] <= s and bounds['east'] >= e and bounds['north'] >= n, bounds
                 assert bounds['east'] - bounds['west'] < 70, bounds
             await page.locator('#place-tab').click()
-            await expect(page.locator('#local-region')).to_have_value(region)
+            await expect(page.locator('#local-region')).to_have_attribute('value', region)
         await page.set_viewport_size({'width': 390, 'height': 844})
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         await page.screenshot(path=str(output / 'mobile.png'), full_page=True)

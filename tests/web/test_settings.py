@@ -45,6 +45,26 @@ class SettingsTests(unittest.TestCase):
         self.file.write_text('NASA_FIRMS_API_KEY=""\nMAP_KEY\n')
         self.assertEqual(Settings.from_environment().firms_key, '')
 
+    def test_prepared_packs_select_polygon_config_without_startup_preparation(self):
+        prepared = self.root / 'config/local_spread_prepared.json'
+        prepared.write_text('{}')
+        packs = self.root / 'data/planning-packs-v1'
+        packs.mkdir(parents=True)
+        (packs / 'index.json').write_text('{}')
+        settings = Settings.from_environment()
+        self.assertEqual(settings.local_config, prepared)
+        self.assertFalse(settings.prepare_data)
+        with patch.dict(os.environ, {'WILDFIRE_LOCAL_CONFIG': str(self.root / 'custom.json'),
+                                     'WILDFIRE_PREPARE_DATA': '0'}):
+            settings = Settings.from_environment()
+            self.assertEqual(settings.local_config, self.root / 'custom.json')
+            self.assertFalse(settings.prepare_data)
+
+    def test_without_prepared_packs_retains_legacy_config(self):
+        (self.root / 'config/local_spread_prepared.json').write_text('{}')
+        settings = Settings.from_environment()
+        self.assertEqual(settings.local_config, self.root / 'config/local_spread.json')
+
     def test_parent_environment_files_and_variable_expansion_are_not_loaded(self):
         (self.root.parent / '.env').write_text('MAP_KEY=parent-test-key\n')
         (self.root / '.env').write_text('MAP_KEY=unconfigured-root-file\n')

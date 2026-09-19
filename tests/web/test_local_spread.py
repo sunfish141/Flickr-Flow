@@ -40,6 +40,9 @@ class LocalApiTests(unittest.TestCase):
     def test_seed_state_roundtrip_and_polygons(self):
         frame = self.seed()
         self.assertTrue(frame['local'])
+        self.assertEqual(frame['coverage']['geometry']['type'], 'Polygon')
+        self.assertTrue(all(f['geometry']['type'] in ('Polygon', 'MultiPolygon')
+                            for f in frame['perimeters']['features']))
         self.assertEqual(frame['perimeters']['features'][0]['properties']['status'], 'active')
         request = {'state': frame['state'], 'origin_at': frame['origin_at']}
         a = self.client.post('/api/local/step', json=request)
@@ -95,6 +98,42 @@ class LocalApiTests(unittest.TestCase):
                 response = self.client.post('/api/local/step',json=body)
             self.assertEqual(response.status_code,422,response.text)
             self.assertIn('calendar', response.text)
+    def test_map_seed_resolves_pack_without_client_engine_selection(self):
+        lon, lat = self.sampler.to_geo.transform(450, 455)
+        response = self.client.post('/api/map/seed', json={'ignitions': [{'longitude': lon, 'latitude': lat, 'intensity': 1}]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['state']['region'], 'fixture')
+        layers = self.client.get('/api/local/regions/fixture/layers').json()
+        self.assertEqual(layers['digest'], self.sampler.sha256)
+        self.assertEqual(set(layers['layers']), {'cover', 'unknown', 'roads'})
+        self.assertEqual(self.client.get('/api/local/regions/missing/layers').status_code, 404)
+
+    def test_map_seed_rejects_uninstalled_and_mixed_coverage(self):
+        lon, lat = self.sampler.to_geo.transform(450, 455)
+        outside = {'longitude': -74, 'latitude': 40.7, 'intensity': 1}
+        for points in ([outside], [{'longitude': lon, 'latitude': lat, 'intensity': 1}, outside]):
+            response = self.client.post('/api/map/seed', json={'ignitions': points})
+            self.assertEqual(response.status_code, 422)
+            self.assertIn('not installed', response.json()['detail'])
+
+    def test_map_firms_requires_coverage_before_any_provider_request(self):
+        with patch('wildfire_data.web.routes.fetch_current_firms') as provider:
+            response = self.client.post('/api/map/firms', json={'west': -75, 'east': -73, 'south': 40, 'north': 42})
+            self.assertEqual(response.status_code, 422)
+            provider.assert_not_called()
+
+    def test_map_firms_maps_observations_to_local_polygons(self):
+        from wildfire_data.core.grid import cell_from_wgs84
+        lon, lat = self.sampler.to_geo.transform(450, 455)
+        runtime = self.client.app.state.runtime
+        state = runtime.model.initial_state({cell_from_wgs84(latitude=lat, longitude=lon).cell_id: .7})
+        runtime.firms_loader = lambda *args, **kwargs: (state, {'eligible_detection_count': 1})
+        w, s, e, n = self.sampler.manifest['bounds_wgs84']
+        response = self.client.post('/api/map/firms', json={'west': w, 'east': e, 'south': s, 'north': n})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()['local'])
+        self.assertEqual(response.json()['metadata']['mapped_starting_cells'], 1)
+        self.assertEqual(response.json()['state']['region'], 'fixture')
 
     def test_invalid_region_state_and_time_are_rejected(self):
         frame = self.seed()
@@ -108,6 +147,35 @@ class LocalApiTests(unittest.TestCase):
         configuration = LocalScenarios('/nonexistent-landscape-config').configuration()
         self.assertFalse(configuration['available'])
         self.assertEqual(configuration['presets'], [])
+
+    def test_prepared_default_exposes_exact_coverage_and_source_metadata(self):
+        config = json.loads(self.config.read_text())
+        config['default_region'] = 'fixture'
+        config['regions'][0]['example_ignition'] = {'latitude': 40, 'longitude': -105}
+        self.config.write_text(json.dumps(config))
+        result = LocalScenarios(self.config).configuration()
+        self.assertEqual(result['default_region'], 'fixture')
+        self.assertEqual(result['region_errors'], [])
+        region = result['regions'][0]
+        self.assertAlmostEqual(region['area_km2'], .81)
+        self.assertEqual(region['coverage']['geometry']['type'], 'Polygon')
+        self.assertEqual(region['example_ignition'], config['regions'][0]['example_ignition'])
+        self.assertEqual(region['sources'], self.sampler.manifest['sources'])
+        self.assertEqual(region['road_count'], len(self.sampler.roads))
+        self.assertEqual(region['unknown_grade_count'], sum(p.get('at_grade') is None for _, p in self.sampler.roads))
+
+    def test_failed_pack_verification_is_visible_and_cannot_simulate(self):
+        config = json.loads(self.config.read_text())
+        config['default_region'] = 'fixture'
+        config['regions'][0]['sha256'] = '0' * 64
+        self.config.write_text(json.dumps(config))
+        scenarios = LocalScenarios(self.config)
+        result = scenarios.configuration()
+        self.assertFalse(result['available'])
+        self.assertEqual(result['regions'], [])
+        self.assertIn('failed verification', result['region_errors'][0])
+        with self.assertRaisesRegex(ValueError, 'unavailable'):
+            scenarios.model('fixture')
 
     def test_regional_presets_depend_on_expanding_archive_not_pilot_bundles(self):
         config = json.loads(self.config.read_text())

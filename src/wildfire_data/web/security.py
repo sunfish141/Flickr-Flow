@@ -45,7 +45,8 @@ class RequestBoundary:
         async def reject(status, detail, headers=None):
             await JSONResponse({'detail': detail}, status_code=status, headers=headers)(scope, receive, secured_send)
 
-        if not scope['path'].startswith('/api/'):
+        path = scope['path'].removeprefix(scope.get('root_path', ''))
+        if not path.startswith('/api/'):
             return await self.app(scope, receive, secured_send)
         headers = {key.lower(): value for key, value in scope['headers']}
         host = headers.get(b'host', b'').decode('latin-1')

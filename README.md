@@ -15,6 +15,15 @@ are separate tested modules; all three reconstruction milestones are implemented
 
 ## Run
 
+For the map-based desktop application, see
+[the desktop quickstart](docs/desktop-quickstart.md). Its separate `WildfireAtlas`
+build opens a native window, automatically falls back to an offline overview,
+and resolves polygon simulation coverage from the ignition location. Hinton and
+Black Hawk appear as installed regions on one map, not simulator choices.
+Online placements elsewhere use the explicitly labelled 1 km research model;
+its grid-cell polygons are not fine-scale fuel-patch perimeters.
+The earlier `WildfirePlanner` package remains the planner-only pilot.
+
 Run these commands from the repository root. Python 3.14.4 and Node 24.18.1
 were used for verification; the frontend requires Node 22 or newer.
 
@@ -38,21 +47,33 @@ PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
 
 `node frontend/build.mjs` is equivalent to the build script when dependencies
 are already installed. Compiled assets are included. Open localhost on port
-8000. The first startup prepares vegetation and polygon data, with progress
-in the server log. A new checkout also
+8000. When the verified pilot packs are installed, startup uses the prepared
+polygon configuration without data preparation. The legacy configuration can
+prepare source data, with progress in the server log. A new checkout also
 needs trusted model artifacts: use the training commands below with the supplied
 CSV release. The server can serve the interface without a model, but reports
 the model unavailable and disables coarse simulation until configured.
 
 ## Local resources
 
-Vegetation and polygon spread now prepare automatically at startup. Missing
+With `data/planning-packs-v1/index.json` installed, the web app defaults to
+`config/local_spread_prepared.json`: bounded 100 m polygon scenarios in Black Hawk,
+Colorado and Hinton, Alberta. Ignition locations select the installed pack. See
+[web polygon mode](docs/web-polygon-mode.md) for coverage, assumptions and tests.
+Outside the packs, connected exploration automatically uses the labelled 1 km
+classifier on supported North American land. Missing terrain remains visible;
+fine fuel/road spread is not available nationwide. Prepared polygon packs do
+not depend on classifier artifacts. Offline, new placements outside packs remain
+blocked; existing grid runs can continue locally.
+
+The legacy `config/local_spread.json` supports startup preparation. Missing
 configured resources are copied from `WILDFIRE_SOURCE_DATA_ROOT` (by default
 the sibling `wildfiredetection/data` archive). Missing public NALCMS land cover
 can be downloaded and verified; canopy and roads reuse retained archives.
 Subsequent starts use this repository's own files. See [startup data preparation](docs/startup-data.md)
-for storage, controls and measured checks. Choose **Polygon spread · roads & fuel**
-in the app to use the restored expanding engine.
+for storage, controls and measured checks. Its **Polygon spread · roads & fuel**
+option is available only with the required expanding archive installed; it is
+not a fallback for the prepared, bounded pilot regions.
 
 Enable **Weather ML + polygon (experimental)** to combine trained 1 km cell
 admission probabilities with native polygon travel and captured weather wind.
@@ -130,6 +151,26 @@ examples. See [measured model results](docs/model-results.md) and the local
 ignored by Git; reproduce the run or transfer trusted artifacts separately.
 
 ## Verification
+
+The separate [Offline Planning v1 workspace](docs/offline-planning-v1.md) provides
+local-only ignition/wind scenarios, durable SQLite checkpoints, baseline/variant
+comparisons and portable reports. It does not replace the research APIs or promote
+an experimental classifier. Use its isolated runtime and bundled-app build path;
+the uncalibrated engine is explicitly research-only.
+
+For the CPU model/feature comparison runner and cached/offline input contracts,
+see [lightweight experiments](docs/experiments.md). It compares compact trees,
+linear models, geometry/context features and optional weather/vegetation without
+automatically replacing the map model. The full training CSV release is required
+to measure accuracy; metadata alone is not sufficient. The downloaded release
+is now available locally and the [first measured experiment round](docs/experiment-round-01.md)
+is complete, including accuracy, model-size and laptop latency comparisons.
+The [second experiment round](docs/experiment-round-02.md) isolates feature effects
+with time-ordered validation and tests a small cached moisture-data source pilot.
+The current target is an 8–16 GB RAM laptop; phone work is deferred.
+See [product direction](docs/product-direction.md) for the rural/offline planning
+and responder-support goals, proposed pilot sequence, and the distinction
+between exploratory scenarios and validated operational use.
 
 ```bash
 PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \

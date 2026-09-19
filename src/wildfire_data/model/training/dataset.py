@@ -33,13 +33,19 @@ def contained(root, name):
 def verify_release(root):
     root = Path(root).resolve()
     checks = {}
+    inventory = []
     for line in (root / 'SHA256SUMS').read_text().splitlines():
         digest, name = line.split(maxsplit=1)
         if name in checks or len(digest) != 64:
             raise DatasetError('Invalid checksum inventory')
-        if sha256_file(contained(root, name)) != digest:
-            raise DatasetError(f'Checksum mismatch: {name}')
+        inventory.append((contained(root, name), name, digest))
         checks[name] = digest
+    missing = [name for path, name, _ in inventory if not path.is_file()]
+    if missing:
+        raise DatasetError('Missing release files: ' + ', '.join(missing))
+    for path, name, digest in inventory:
+        if sha256_file(path) != digest:
+            raise DatasetError(f'Checksum mismatch: {name}')
     if 'manifest.json' not in checks:
         raise DatasetError('The completion manifest is not checksummed')
     manifest = json.loads((root / 'manifest.json').read_text())
@@ -81,7 +87,7 @@ def join_exact(base, sidecar, name):
     return base.merge(sidecar.drop(columns=list(shared)), on='example_id', validate='one_to_one', how='left')
 
 
-def load_dataset(root, *, weather=True):
+def load_dataset(root, *, weather=True, geometry=False, vegetation=False):
     root = Path(root)
     manifest, digest = verify_release(root)
     entries = {item['path']: item for item in manifest['files']}
@@ -123,12 +129,23 @@ def load_dataset(root, *, weather=True):
             raise DatasetError('Incident assignments disagree with their source manifest')
     if (dates[base.incident_split.isin(['train', 'calibration'])] >= later).any():
         raise DatasetError('Training/calibration reaches the later-time holdout')
+    sidecars = []
+    if geometry or weather:
+        sidecars.append('directional_features.csv')
     if weather:
-        for name in ['weather_features.csv', 'directional_features.csv', 'weather_history.csv']:
+        sidecars.extend(['weather_features.csv', 'weather_history.csv'])
+    if sidecars:
+        for name in sidecars:
             # Keep numeric features and shared identity, not large source arrays.
             cols = [c for c in entries[name]['columns'] if c == 'example_id' or c in IDENTITY
-                    or c.startswith(('fire_', 'wind_')) or c in WEATHER_INPUTS or c in HISTORY_INPUTS]
+                    or c.startswith('fire_') or (weather and
+                        (c.startswith('wind_') or c in WEATHER_INPUTS or c in HISTORY_INPUTS))]
             base = join_exact(base, read(name, cols), name)
+    if vegetation:
+        from wildfire_data.model.features.schema import STATIC_VEGETATION_COLUMNS, COVER_DIAGNOSTIC_COLUMNS
+        base = join_exact(base, read('vegetation_features.csv',
+            ['example_id', *STATIC_VEGETATION_COLUMNS, *COVER_DIAGNOSTIC_COLUMNS,
+             *[c for c in IDENTITY if c in entries['vegetation_features.csv']['columns']]]), 'vegetation')
     return base, {'manifest_sha256': digest, 'later_test_at': later.isoformat(),
                   'row_count': len(base), 'files': {n: e['sha256'] for n, e in entries.items()}}
 

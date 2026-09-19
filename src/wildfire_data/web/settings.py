@@ -20,6 +20,7 @@ class Settings:
     prepare_data: bool = False
     download_vegetation: bool = True
     source_data_root: Path | None = None
+    fuel_policy: Path | None = None
 
     @classmethod
     def from_environment(cls):
@@ -37,15 +38,22 @@ class Settings:
         run = assets / 'artifacts/incident-two-pass-recovered-20260907-boreal/run_manifest.json'
         if (root / 'artifacts/public-csv/run_manifest.json').is_file():
             run = root / 'artifacts/public-csv/run_manifest.json'
+        prepared_config = root / 'config/local_spread_prepared.json'
+        have_prepared_packs = prepared_config.is_file() and (root / 'data/planning-packs-v1/index.json').is_file()
+        default_local = prepared_config if have_prepared_packs else root / 'config/local_spread.json'
+        local_config = Path(os.getenv('WILDFIRE_LOCAL_CONFIG', str(default_local)))
+        # Prepared packs are runtime inputs, never a reason to trigger national
+        # downloads or conversion. Explicit legacy configurations remain supported.
+        default_preparation = '0' if local_config.resolve() == prepared_config.resolve() else '1'
         return cls(
             run_manifest=Path(os.getenv('WILDFIRE_RUN_MANIFEST', str(run))),
             data_root=Path(os.getenv('WILDFIRE_DATA_ROOT', str(assets / 'data'))),
-            local_config=Path(os.getenv('WILDFIRE_LOCAL_CONFIG', str(root / 'config/local_spread.json'))),
+            local_config=local_config,
             pass_name=os.getenv('WILDFIRE_MODEL_PASS', 'pass_2'),
             allowed_hosts=tuple(h.strip() for h in os.getenv('WILDFIRE_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()),
             vegetation_manifest=os.getenv('WILDFIRE_VEGETATION_MANIFEST'),
             firms_key=firms_key,
-            prepare_data=os.getenv('WILDFIRE_PREPARE_DATA', '1') != '0',
+            prepare_data=os.getenv('WILDFIRE_PREPARE_DATA', default_preparation) != '0',
             download_vegetation=os.getenv('WILDFIRE_DOWNLOAD_VEGETATION', '1') != '0',
             source_data_root=Path(os.getenv('WILDFIRE_SOURCE_DATA_ROOT', str(root.parent / 'wildfiredetection/data'))),
         )

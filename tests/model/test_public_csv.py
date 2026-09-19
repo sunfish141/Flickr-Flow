@@ -15,7 +15,7 @@ from wildfire_data.model.features.schema import FRONTIER_BASELINE_COLUMNS
 from wildfire_data.model.loading import load_pass_model
 from wildfire_data.model.recursive_transition import SyntheticObservationCalibration
 from wildfire_data.model.training.dataset import DatasetError, join_exact, verify_release, cohort, TARGET, REQUIRED_CSVS
-from wildfire_data.model.training.public_csv import fit_component, metrics
+from wildfire_data.model.training.public_csv import fit_component, fitting_cohort, metrics
 from wildfire_data.model.estimators import WEATHER_COLUMNS, derive_weather
 from wildfire_data.providers.terrain_csv import CSVTerrainProvider
 
@@ -72,6 +72,18 @@ class DatasetContractTests(unittest.TestCase):
 
 
 class TrainingTests(unittest.TestCase):
+    def test_reference_fit_excludes_labels_reaching_later_test(self):
+        frame = pd.DataFrame({'incident_split': ['train']*3,
+            'firms_center_has_detection': [0]*3, 'binary_training_eligible': [True]*3,
+            'feature_cutoff_at': ['2026-08-01T00:00Z']*3,
+            'target_end_at': ['2026-08-01T12:00Z', '2026-08-02T00:00Z', '2026-08-02T12:00Z']})
+        kept, excluded = fitting_cohort(frame, 'train', '2026-08-02T00:00Z')
+        self.assertEqual(kept.index.tolist(), [0])
+        self.assertEqual(excluded, 2)
+        for invalid in [None, '2026-07-31T00:00Z']:
+            with self.assertRaisesRegex(ValueError, 'end after'):
+                fitting_cohort(frame.assign(target_end_at=invalid), 'train', '2026-08-02T00:00Z')
+
     def test_train_only_support_and_calibration_rejects_overlap(self):
         train, cal = rows('train'), rows('calibration')
         train[FRONTIER_BASELINE_COLUMNS[-1]] = np.nan

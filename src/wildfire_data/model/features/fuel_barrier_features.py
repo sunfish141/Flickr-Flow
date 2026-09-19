@@ -54,7 +54,7 @@ class FuelBarrierSampler:
         self.sha256 = sha256_file(self.path)
         if expected_sha256 and self.sha256 != expected_sha256:
             raise ValueError('Landscape manifest checksum mismatch')
-        self.manifest = json.loads(self.path.read_text())
+        self.manifest = json.loads(self.path.read_text(encoding='utf-8'))
         m = self.manifest
         if m.get('kind') != LANDSCAPE_VERSION or m.get('status') != 'complete' or m.get('crs') != TRAINING_GRID_CRS:
             raise ValueError('Requires a complete supported landscape bundle')
@@ -65,7 +65,7 @@ class FuelBarrierSampler:
             path = (self.path.parent / asset['path']).resolve()
             if path.parent != self.path.parent or sha256_file(path) != asset['sha256']:
                 raise ValueError('Landscape asset checksum/path mismatch')
-            for f in json.loads(path.read_text())['features']:
+            for f in json.loads(path.read_text(encoding='utf-8'))['features']:
                 g = shape(f['geometry'])
                 if not g.is_valid or g.is_empty:
                     raise ValueError('Invalid landscape geometry')

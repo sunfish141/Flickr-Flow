@@ -1,0 +1,55 @@
+name: Complete desktop internal build
+on:
+  workflow_dispatch:
+jobs:
+  windows-preview:
+    runs-on: windows-2025
+    env:
+      PYTHONPATH: src;tests
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      PROJ_NETWORK: 'OFF'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-desktop.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: python -m pip install -r requirements-desktop.lock
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npm run build:planning
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: python -m pytest tests/desktop tests/web tests/planning -q --import-mode=importlib
+      - run: python scripts/obtain_planning_build_input.py
+        env:
+          PLANNING_PACKS_URL: ${{ vars.PLANNING_PACKS_URL }}
+          PLANNING_PACKS_SHA256: ${{ vars.PLANNING_PACKS_SHA256 }}
+      - run: python scripts/obtain_desktop_model_input.py
+        env:
+          DESKTOP_MODEL_URL: ${{ vars.DESKTOP_MODEL_URL }}
+          DESKTOP_MODEL_SHA256: ${{ vars.DESKTOP_MODEL_SHA256 }}
+      - run: python scripts/build_desktop.py
+      - run: node node_modules/playwright-core/cli.js install chromium
+        working-directory: frontend
+      - run: python scripts/smoke_desktop.py --frozen
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-verification-windows-x64
+          path: artifacts/desktop-smoke/frozen/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WildfireAtlas-UNSIGNED-windows-x64
+          path: dist/WildfireAtlas/

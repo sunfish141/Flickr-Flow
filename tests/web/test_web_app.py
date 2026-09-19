@@ -70,6 +70,26 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/step', json=request).json(), advanced)
         self.assertEqual(self.seed()['state']['step_index'], 0)
 
+    def test_grid_polygons_are_actual_equal_area_footprints(self):
+        from pyproj import Transformer
+        from shapely.geometry import shape, Point
+        from shapely.ops import transform
+        from wildfire_data.core.grid import TRAINING_GRID_CRS
+        frame = self.seed()
+        self.assertEqual(frame['simulation']['resolution_m'], 1000)
+        self.assertEqual(frame['simulation']['engine'], 'reference-grid')
+        projection = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
+        for point in frame['points']:
+            polygon = shape(point['geometry'])
+            self.assertEqual(polygon.geom_type, 'Polygon')
+            self.assertTrue(polygon.is_valid)
+            self.assertTrue(polygon.contains(Point(point['longitude'], point['latitude'])))
+            self.assertAlmostEqual(transform(projection.transform, polygon).area, 1_000_000, delta=.01)
+
+    def test_missing_seed_terrain_is_visible_before_playback(self):
+        self.client.app.state.runtime.terrain = lambda _: {'terrain_coverage_status': 'outside-csv-coverage'}
+        self.assertEqual(self.seed()['terrain_missing_count'], 1)
+
     def test_low_intensity_seed_burns_out_after_two_api_steps(self):
         frame = self.client.post('/api/seed', json={'ignitions': [
             {'latitude': 53.02, 'longitude': -117.31, 'intensity': .1}]}).json()

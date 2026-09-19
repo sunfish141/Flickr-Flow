@@ -1,0 +1,21 @@
+# Python 3.12. Runtime only; verified in .venv-runtime, separate from ML.
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+certifi==2026.7.22
+click==8.5.0
+colorama==0.4.6; sys_platform == 'win32'
+fastapi==0.141.1
+h11==0.16.0
+idna==3.20
+numpy==2.5.3
+platformdirs==4.11.11
+pydantic==2.13.5
+pydantic-core==2.46.5
+pyproj==3.8.0
+shapely==2.1.2
+starlette==1.6.0
+threadpoolctl==3.7.0
+typing-inspection==0.4.4
+typing-extensions==4.16.0
+uvicorn==0.53.0

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wildfire Atlas Desktop</title><link rel="stylesheet" href="/desktop-static/shell.css">
+<script type="module" src="/desktop-static/shell.js"></script></head>
+<body>
+<header><div class="brand">Wildfire Atlas <small>DESKTOP · RESEARCH ONLY</small></div>
+<div class="network"><span id="network-status" role="status">Opening local services…</span>
+<button id="settings-open">Settings</button></div></header>
+<p id="shell-error" role="alert" hidden></p>
+<main><iframe id="explorer" title="Wildfire map" src="/explore/"></iframe></main>
+<dialog id="settings"><form id="key-form"><h1>Desktop settings</h1>
+<p>Connectivity is automatic. Online maps appear when reachable; the bundled overview and installed regions remain available without internet. Connectivity never adds simulation coverage automatically.</p>
+<p>Online maps send your IP address and viewed map area to OpenStreetMap. No tiles are bulk-downloaded. FIRMS is requested only when you load detections.</p>
+<label for="firms-key">NASA FIRMS map key (optional)</label><input id="firms-key" type="password" autocomplete="off" maxlength="256">
+<p id="key-status">Checking credential availability…</p><p>The key is held in memory for this session only. It is not included in scenario exports or saved to disk. Leave blank and apply to clear it.</p>
+<div class="actions"><button type="submit">Apply session key</button><button id="settings-close" type="button">Close</button></div></form></dialog>
+</body></html>

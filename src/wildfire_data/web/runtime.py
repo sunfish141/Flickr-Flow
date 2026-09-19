@@ -84,7 +84,7 @@ class Runtime:
                     sampler = TerrainFeatureSampler(self.settings.data_root, max_cached_blocks=4)
                     self.terrain = lru_cache(maxsize=8192)(sampler.sample_cell)
         except Exception:
-            logger.error('Model initialization failed; verify configured artifacts')
+            logger.exception('Model initialization failed; verify configured artifacts')
             self.model_error = 'Model unavailable. Check WILDFIRE_RUN_MANIFEST and WILDFIRE_DATA_ROOT on the server.'
         if self.vegetation is None and self.load_defaults:
             try:
@@ -94,7 +94,7 @@ class Runtime:
             except Exception:
                 logger.warning('Optional vegetation sources unavailable')
         if self.model_error is None:
-            policy_path = REPOSITORY_ROOT / 'config/fuel_policy.json'
+            policy_path = self.settings.fuel_policy or REPOSITORY_ROOT / 'config/fuel_policy.json'
             self.model.fuel_policy = FuelPolicy(**json.loads(policy_path.read_text()))
             self.model.fuel_sampler = self.vegetation if callable(getattr(self.vegetation, 'sample_cell', None)) else None
             if isinstance(self.model.landscape, Landscape) and hasattr(self.vegetation, 'land_cover_cell'):

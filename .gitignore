@@ -4,6 +4,13 @@ __pycache__/
 *.csv
 *.png
 .venv
+.venv-runtime/
+.venv-web/
+.venv-desktop/
+.venv-prep/
+build/
+dist/
+.pytest_cache/
 *.gz
 !src/wildfire_data/model/features/resources/north-america-water.geojson.gz
 *.joblib
@@ -14,6 +21,7 @@ config/*
 !config/vegetation_inspector_sources.json
 !config/local_spread.json
 !config/fuel_policy.json
+!config/local_spread_prepared.json
 !config/storage_budget.json
 data/
 node_modules/

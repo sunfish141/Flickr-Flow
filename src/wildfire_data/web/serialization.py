@@ -2,9 +2,25 @@
 
 from dataclasses import asdict
 from datetime import timedelta
+from functools import lru_cache
 
-from wildfire_data.core.grid import cell_from_id
+from pyproj import Transformer
+
+from wildfire_data.core.grid import cell_from_id, TRAINING_GRID_CRS
 from wildfire_data.model.incident_transition import EvidenceCell
+
+
+@lru_cache(maxsize=1)
+def grid_transform():
+    return Transformer.from_crs(TRAINING_GRID_CRS, 'EPSG:4326', always_xy=True)
+
+
+@lru_cache(maxsize=32768)
+def cell_ring(cell_id):
+    """Actual equal-area cell corners, not circles or degree-based squares."""
+    west, south, east, north = cell_from_id(cell_id).bounds_projected
+    return tuple(grid_transform().transform(x, y) for x, y in
+                 ((west, south), (east, south), (east, north), (west, north), (west, south)))
 
 
 def state_response(state, *, origin_at, predictions=(), metadata=None, terrain_missing=0):
@@ -17,6 +33,7 @@ def state_response(state, *, origin_at, predictions=(), metadata=None, terrain_m
         cell, score = active.get(cell_id), scores.get(cell_id)
         status = "active" if cell else "burned" if cell_id in burned else "candidate"
         points.append({"cell_id": cell_id, "latitude": lat, "longitude": lon, "status": status,
+            "geometry": {"type": "Polygon", "coordinates": [cell_ring(cell_id)]},
             "intensity": cell.intensity if cell else None,
             "fuel_remaining": cell.fuel_remaining if cell else None,
             "burn_duration_hours": getattr(cell, 'burn_duration_hours', None),
@@ -30,6 +47,8 @@ def state_response(state, *, origin_at, predictions=(), metadata=None, terrain_m
             "bright_ti4_max": cell.bright_ti4_max if isinstance(cell, EvidenceCell) else None,
             "remaining_active_steps": cell.remaining_active_steps if cell else None})
     return {"state": asdict(state), "origin_at": origin_at.isoformat(),
+        "simulation": {"engine": "reference-grid", "resolution_m": 1000,
+                       "geometry_meaning": "grid-cell footprints, not fine-scale fire perimeters"},
         "valid_at": (origin_at + timedelta(hours=12 * state.step_index)).isoformat(),
         "elapsed_hours": 12 * state.step_index, "points": points,
         "active_count": len(active), "burned_count": len(state.burned_cell_ids),

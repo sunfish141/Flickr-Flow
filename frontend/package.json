@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:planning": "node build-planning.mjs",
     "build": "node build.mjs",
     "test": "node --test tests/*.test.js",
     "watch": "node build.mjs --watch"
