@@ -34,6 +34,14 @@ desktop initial state, desktop inspector, help dialog, and an open inspector at
 assistive-technology assessment. Screenshots and JSON reports are generated
 locally under `artifacts/web-react-preview/` and excluded from Git.
 
+Handoff checks also confirmed the training CLI help, consistent dependencies
+via `pip check` in the tested environment, and valid local documentation links.
+An app started with explicitly missing model/data paths still served its UI and
+assets, reported unavailable capabilities, and returned a sanitized 503 for
+simulation. The four focused FIRMS tests passed after aligning the missing-key
+message with environment-based configuration. This was not a fresh dependency
+installation or a live NASA connectivity check.
+
 ## Repeat the checks
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in

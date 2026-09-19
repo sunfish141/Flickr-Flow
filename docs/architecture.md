@@ -40,3 +40,7 @@ aborting; a late response, failure or cleanup cannot affect a replacement reques
 timers. Pause, reset, seeking, source changes and tab hiding cancel pending work.
 Hiding also cancels explicit seed/FIRMS loads and clears their loading indicator;
 completed server preparation may remain cached for a later retry.
+
+[Provider contracts](providers.md) describe injection signatures, ownership,
+configuration precedence and source restoration. [Limitations](limitations.md)
+distinguish CSV-supported inference from optional source capabilities.

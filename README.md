@@ -14,9 +14,17 @@ are separate tested modules; all three reconstruction milestones are implemented
 
 ## Run
 
-From this directory, install `requirements.lock` into a Python environment.
-An existing compatible environment can also be used. Build frontend sources
-with Node 22 or newer:
+Run these commands from the repository root. Python 3.14.4 and Node 24.18.1
+were used for verification; the frontend requires Node 22 or newer.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.lock
+```
+
+An existing compatible Python environment can also be used. Build the frontend
+and start the API:
 
 ```bash
 cd frontend
@@ -29,7 +37,10 @@ PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
 
 `node frontend/build.mjs` is equivalent to the build script when dependencies
 are already installed. Compiled assets are included. Open localhost on port
-8001; the parent application can continue using port 8000.
+8001; another application can continue using port 8000. A new checkout also
+needs trusted model artifacts: use the training commands below with the supplied
+CSV release. The server can serve the interface without a model, but reports
+the model unavailable and disables coarse simulation until configured.
 
 ## Local resources
 
@@ -54,6 +65,9 @@ capability; they never produce fabricated predictions.
 Live FIRMS needs `NASA_FIRMS_API_KEY` or `MAP_KEY` in the server environment.
 This app deliberately does not read another application's environment file.
 Historical observations and offline simulations do not require the live key.
+See [provider contracts and configuration](docs/providers.md) for the exact
+selection rules, expected source paths and injection interfaces. See
+[limitations](docs/limitations.md) for what the CSV-only checkout can support.
 
 ## Train and evaluate from the public CSVs
 
@@ -83,6 +97,13 @@ held-out metrics, and a completion manifest with relative artifact paths and
 checksums. Reload predictions must match before completion is published.
 `predict` exports paired probabilities for the selected held-out observed rows;
 it does not fetch weather for new map cells.
+
+To verify the supplied release independently of a model:
+
+```bash
+PYTHONPATH=src python -m wildfire_data.model.training.public_csv verify \
+  --dataset htn_training
+```
 
 The actual reconstruction fit used **20,940** training and **3,403** calibration
 examples. See [measured model results](docs/model-results.md) and the local

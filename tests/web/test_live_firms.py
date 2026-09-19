@@ -33,7 +33,7 @@ class LiveFirmsTests(unittest.TestCase):
         self.assertEqual(metadata['recent_detections_excluded'], 1)
 
     def test_credentials_and_upstream_errors_are_not_exposed(self):
-        with self.assertRaisesRegex(LiveFirmsError, 'Set NASA_FIRMS_API_KEY'):
+        with self.assertRaisesRegex(LiveFirmsError, 'Set NASA_FIRMS_API_KEY or MAP_KEY in the server environment'):
             fetch_current_firms('', BOUNDS)
         session = MagicMock()
         session.get.side_effect = requests.ConnectionError('URL contains SECRET')

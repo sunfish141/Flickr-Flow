@@ -28,7 +28,7 @@ class LiveFirmsError(ValueError):
 def fetch_current_firms(api_key, bounds=DEFAULT_BOUNDS, *, now=None, session=None):
     """Read all three streams; fail the preview if any stream is unavailable."""
     if not api_key:
-        raise LiveFirmsError("Set NASA_FIRMS_API_KEY or MAP_KEY in config/.env, then restart the server.")
+        raise LiveFirmsError("Set NASA_FIRMS_API_KEY or MAP_KEY in the server environment, then restart the server.")
     now = now or datetime.now(timezone.utc)
     owned = session is None
     session = session or requests.Session()

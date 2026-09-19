@@ -21,5 +21,9 @@ replay, keyboard controls, mobile layout and automated accessibility. See
 distinguish real inference from explicit browser fixtures and list remaining
 resource requirements.
 
+The handoff also includes [provider contracts and configuration](providers.md)
+and [research limitations and missing inputs](limitations.md). These describe
+what a code-only checkout needs before it can reproduce the locally tested run.
+
 Each milestone is tested before commit; the user syncs it at the checkpoint. Existing training data,
 license, configurations, and the original application repository are preserved.
