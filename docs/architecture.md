@@ -21,9 +21,18 @@ Runtime-only configs and portable vegetation manifests keep the copied sources
 independent of the old repository. Inspector and landscape sampling share the
 staged TIFF cache. See [startup data](startup-data.md).
 
-Detailed landscapes retain up to 48 verified tile samplers and 48 prepared tile
-graphs (at most 250,000 patches), plus eight assembled models (at most 500,000
-patch references). Sampler cache hits check source file size and modification/
+Detailed landscapes default to 128 verified tile samplers and 128 prepared tile
+graphs (at most 1.5 million patches), plus eight assembled models (at most 3 million
+patch references). `expanding.max_tiles` and `expanding.max_patches` configure
+scenario capacity, validated before opening source archives. Cache ceilings grow
+with those limits; allocation remains demand-driven. The request schema admits
+at most 512 tile records; the configured tile budget is checked before loading
+submitted state or new tiles. The cumulative patch budget is checked before
+assembling a mosaic, including scenarios with many road fragments. Capacity is
+exposed through `/api/config` and frame metadata; the frontend displays that value.
+Capacity is not included in the physics identity, so raising a limit does not
+require resetting otherwise compatible scenarios.
+Sampler cache hits check source file size and modification/
 change times; changed files are rehashed and decoded. Model keys use verified
 source hashes within the current mesh/policy instance. Tile graphs retain
 road-cut geometry and internal adjacency. Expansion reuses those graphs and

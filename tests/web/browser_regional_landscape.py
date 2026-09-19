@@ -31,6 +31,10 @@ async def main(base_url):
         await expect(page.locator('#local-region')).to_be_visible()
         await expect(page.locator('#local-region option[value="boulder"]')).to_have_count(0)
         await expect(page.locator('#local-region option[value="edson"]')).to_have_count(0)
+        await page.locator('#help').click()
+        await expect(page.locator('#help-dialog')).to_contain_text('24 hours after ignition')
+        await expect(page.locator('#help-dialog')).to_contain_text(f"{config['local_spread']['policy']['residence_minutes']:g} simulated minutes")
+        await page.locator('#close-help').click()
         await page.locator('#show-basemap').uncheck()
         await page.locator('.coordinates summary').click()
         results = []
@@ -53,7 +57,7 @@ async def main(base_url):
             initial = await response.json()
             assert response.status == 200, initial
             assert initial['expanding'] and initial['roads']['features'] and initial['perimeters']['features']
-            assert len(initial['state']['tiles']) <= 24
+            assert len(initial['state']['tiles']) <= config['local_spread']['limits']['max_tiles']
             async with page.expect_response('**/api/landscape/step', timeout=240000) as pending:
                 await page.locator('#step').click()
             response = await pending.value
@@ -78,6 +82,7 @@ async def main(base_url):
         # their requests. Assert actual map bounds and endpoint selection.
         fixtures = []
         control_config = {**config, 'firms_configured': True,
+                          'local_spread': {**config['local_spread'], 'limits': {'max_tiles': 64, 'max_area_km2': 576, 'max_patches': 750000}},
                           'historical_firms': {**config['historical_firms'], 'available': True}}
         await page.route('**/api/config', lambda route: route.fulfill(json=control_config))
 
@@ -94,6 +99,7 @@ async def main(base_url):
             await page.locator('#place-tab').click()
             await page.locator('#local-region').select_option(region)
             await page.locator('#firms-tab').click()
+            await expect(page.get_by_text('Detailed scenarios support', exact=False)).to_contain_text('64 tiles (576 km²)')
             await expect(page.locator('#local-region')).to_have_value(region)
             await expect(page.locator('#firms-scope')).to_have_value('view')
             await expect(page.locator('#firms-scope option[value="all"]')).to_have_js_property('disabled', True)

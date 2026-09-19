@@ -55,6 +55,18 @@ class LocalSpreadTests(unittest.TestCase):
         self.assertGreater(sum(len(p.interiors) for p in ([burned] if burned.geom_type == 'Polygon' else burned.geoms)), 0)
         self.assertEqual(m.frame((0,), 600)['burned_patch_count'], frame['burned_patch_count'])
 
+    def test_each_patch_burns_out_after_its_own_ignition_time(self):
+        m = self.model(bounds=(0,0,60,30))
+        seed = min(range(len(m.centers)), key=lambda i: m.centers[i].x)
+        self.assertEqual(sorted(m.arrivals((seed,)).values()), [0., 30.])
+        self.assertEqual(m.frame((seed,), 119)['burned_patch_count'], 0)
+        frame = m.frame((seed,), 120)
+        self.assertEqual((frame['active_patch_count'], frame['burned_patch_count']), (1,1))
+        self.assertEqual(list(frame['cells'].values()), [{'active_area_m2': 900., 'burned_area_m2': 900.}])
+        self.assertEqual(m.frame((seed,), 149)['active_patch_count'], 1)
+        self.assertEqual(m.frame((seed,), 150)['burned_patch_count'], 2)
+        self.assertEqual(m.frame((seed,), 1440)['active_patch_count'], 0)
+
     def test_unknown_width_only_changes_geometry_with_explicit_assumption(self):
         sampler = bundle(self.temp.name, roads=[(LineString([(45, 0), (45, 120)]), {'width_m': None})])
         a = LocalSpreadModel(sampler, policy())

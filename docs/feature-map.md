@@ -33,8 +33,10 @@ expand over local tiles and support timeline replay. See
 [startup preparation and measured checks](startup-data.md).
 
 Regional bounds are map presets, not administrative boundaries or fire barriers.
-Each detailed scenario remains limited to 24 tiles (216 km²), 500 starting points
-and 96 hours; the app does not build a state/province-sized mesh. Selection is
+Each detailed scenario defaults to 128 tiles (1,152 km²), 1.5 million fuel patches,
+500 starting points and 96 hours. Tile and patch budgets are configurable in
+`config/local_spread.json`; the app displays the server's current area limit.
+The app does not build a state/province-sized mesh. Selection is
 retained when switching to FIRMS, which uses only the visible map area in detailed
 mode. Zoom in before loading satellite detections. Fixed pilot APIs remain
 available, with pilot choices shown as a fallback if the expanding archive is
@@ -48,6 +50,16 @@ loading continue. Busy landscape requests retry automatically; Pause cancels
 the load and its retries. Reset clears the scenario. Provider failures retain the
 last completed frame; rate-limited FIRMS requests show a bounded retry countdown.
 Historical comparison advances 24 hours per frame and stops at the final day.
+
+Burnout follows the model's simulated fuel policy. The 1 km model starts each
+new ignition with a uniform unit of fuel and consumes half per 12-hour step,
+normally reaching burned status after 24 hours. Polygon spread instead tracks
+arrival time for each patch and marks it burned after `residence_minutes`
+(currently 120 minutes). A summary cell can contain both active and burned
+patches and contribute to both counts. Historical daily frames do not reset
+these clocks. Burning durations are assumptions, not vegetation measurements;
+burned fuel cannot reignite within the same scenario. The Help dialog explains
+these differences and shows the configured polygon burning duration.
 
 Road/fuel tiles and their prepared spread graphs stay in bounded memory caches.
 Startup prepares the regional examples and recent retained tiles before serving

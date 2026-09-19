@@ -30,7 +30,7 @@ def tile_bounds(key):
 
 
 class LandscapeTiles:
-    def __init__(self, source_config, data_root, release, *, road_archive=None, road_archive_sha256=None, raster_cache=None):
+    def __init__(self, source_config, data_root, release, *, road_archive=None, road_archive_sha256=None, raster_cache=None, max_cached_tiles=48):
         self.source_config, self.data_root, self.release = Path(source_config), Path(data_root), release
         if not road_archive:
             raise ValueError('Configure a completed offline road archive; simulation-time road downloads are disabled')
@@ -41,6 +41,7 @@ class LandscapeTiles:
         self.readers, self.reader_stack = {}, ExitStack()
         self.raster_cache = raster_cache
         self.samplers = OrderedDict()
+        self.max_cached_tiles = max_cached_tiles
 
     def close(self):
         self.reader_stack.close()
@@ -83,7 +84,7 @@ class LandscapeTiles:
                 readers=self.readers, stack=self.reader_stack, raster_cache=self.raster_cache)
         sampler = FuelBarrierSampler(path, expected_sha256=expected)
         self.samplers[key] = (self.signature(path, sampler.manifest), sampler)
-        while len(self.samplers) > 48:
+        while len(self.samplers) > self.max_cached_tiles:
             self.samplers.popitem(last=False)
         return sampler
 

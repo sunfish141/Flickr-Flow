@@ -9,7 +9,7 @@ from shapely.ops import unary_union
 
 from model.fuel_fixture import bundle, policy
 from wildfire_data.providers.landscape.tiles import tile_bounds, tile_key, LandscapeMosaic
-from wildfire_data.web.landscape_spread import ExpandingScenarios, ExpandingStep
+from wildfire_data.web.landscape_spread import ExpandingScenarios, ExpandingStep, LandscapeLimits, MAX_REQUEST_TILES
 from wildfire_data.web.local_spread import LocalScenarios
 from wildfire_data.model.local_spread import LocalSpreadModel
 
@@ -101,8 +101,66 @@ class ExpandingTests(unittest.TestCase):
             self.step(seed)
 
     def test_tile_budget_does_not_drop_requested_locations(self):
-        with self.assertRaisesRegex(ValueError,'budget'):
-            self.scenarios.load([(x,0) for x in range(25)],{})
+        self.scenarios.limits = LandscapeLimits(max_tiles=2)
+        samplers = {}
+        self.scenarios.load([(0,0), (1,0), (1,0)], samplers)
+        loaded = list(self.store.loaded)
+        with self.assertRaisesRegex(ValueError, '2-tile \\(18 km²\\) budget'):
+            self.scenarios.load([(2,0)], samplers)
+        self.assertEqual(set(samplers), {(0,0), (1,0)})
+        self.assertEqual(self.store.loaded, loaded)
+
+    def test_expansion_and_state_roundtrip_continue_past_24_tiles(self):
+        samplers = {}
+        self.scenarios.load([(x,0) for x in range(-23,1)], samplers)
+        initial = self.scenarios.frame(self.coordinates, samplers, 0, self.origin)
+        advanced = self.step(initial)
+        self.assertEqual(len(advanced['state']['tiles']), 25)
+        self.assertEqual(advanced['state']['incident_id'], initial['state']['incident_id'])
+        self.assertEqual(advanced['metadata']['limits']['max_area_km2'], 1152)
+        self.assertGreater(advanced['burned_area_m2'], 0)
+        self.assertEqual(advanced, self.step(initial))
+        self.assertGreaterEqual(self.step(advanced)['burned_area_m2'], advanced['burned_area_m2'])
+
+    def test_patch_budget_rejects_before_assembling_a_large_model(self):
+        self.scenarios.limits = LandscapeLimits(max_patches=1000)
+        samplers = {(x,0): self.store.load((x,0)) for x in range(2)}
+        with patch.object(LocalSpreadModel, 'join', side_effect=AssertionError('Over-budget mosaic must not be built')):
+            with self.assertRaisesRegex(ValueError, '1,000 fuel-patch budget'):
+                self.scenarios.model(samplers)
+
+    def test_submitted_state_cannot_bypass_configured_budget(self):
+        first = self.seed()
+        advanced = self.step(first)
+        self.scenarios.limits = LandscapeLimits(max_tiles=1)
+        loaded = list(self.store.loaded)
+        with self.assertRaisesRegex(ValueError, '1-tile'):
+            self.step(advanced)
+        self.assertEqual(self.store.loaded, loaded)
+
+    def test_limits_are_validated_before_source_loading_and_exposed_in_config(self):
+        config = {'source_config': 'sources.json', 'data_root': 'data', 'release': 'test'}
+        for invalid in [{'max_tiles': 0}, {'max_tiles': MAX_REQUEST_TILES+1},
+                        {'max_tiles': 1.5}, {'max_patches': 0}, {'max_patches': True}, {'max_patches': 5000001}]:
+            with self.subTest(invalid=invalid), patch('wildfire_data.web.landscape_spread.LandscapeTiles') as store:
+                with self.assertRaises(ValueError):
+                    ExpandingScenarios({**config, **invalid}, Path(self.temp.name)/'config.json', self.local)
+                store.assert_not_called()
+        self.local.expanding = self.scenarios
+        self.assertEqual(self.local.configuration()['limits'],
+                         {'max_tiles': 128, 'max_area_km2': 1152, 'max_patches': 1500000})
+        with patch('wildfire_data.web.landscape_spread.LandscapeTiles', return_value=self.store) as store:
+            larger = ExpandingScenarios({**config, 'max_tiles': 256, 'max_patches': 3000000},
+                                        Path(self.temp.name)/'config.json', self.local)
+            self.assertEqual(larger.configuration()['max_area_km2'], 2304)
+            self.assertEqual(store.call_args.kwargs['max_cached_tiles'], 256)
+            self.assertEqual(larger.profile, self.scenarios.profile)  # Capacity does not change fire physics.
+
+    def test_state_request_size_stays_bounded(self):
+        first = self.seed()
+        first['state']['tiles'] *= MAX_REQUEST_TILES+1
+        with self.assertRaises(ValueError):
+            ExpandingStep.model_validate({'state': first['state'], 'origin_at': first['origin_at']})
 
     def test_empty_and_oversized_satellite_requests_fail_before_loading_tiles(self):
         loaded = list(self.store.loaded)

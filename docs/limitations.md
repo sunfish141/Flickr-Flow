@@ -61,7 +61,7 @@ but does not establish that its inputs were available during May–August.
 
 ## Verification and operation boundaries
 
-The checkpoint passed 130 Python tests, 14 frontend tests and production-browser
+The checkpoint passed 137 Python tests, 14 frontend tests and production-browser
 checks. Real API/browser checks used the trained coarse model and restored
 vegetation/road sources, including polygon expansion and replay. Large-display
 and historical browser cases used explicit fixtures; engine edge cases also

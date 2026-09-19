@@ -3,6 +3,8 @@
   "expanding": {
     "enabled": true,
     "prewarm_tiles": 24,
+    "max_tiles": 128,
+    "max_patches": 1500000,
     "presets": [
       {
         "id": "alberta",

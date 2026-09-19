@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 130 tests passed |
+| Python behavior/regression suite | 137 tests passed |
 | Frontend API, timeline and cancellation unit tests | 14 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -109,6 +109,34 @@ took 0.21 s. Both returned the same seven mapped cells and 3.32 MB response.
 Startup prepares tile graphs; fetching current FIRMS observations, joining
 tiles, and serializing the response still contribute to the first request.
 These timings are recorded in `after-startup-http.json` in the same directory.
+
+### Expanded landscape capacity and burnout
+
+The expanded-capacity checkpoint passed 137 Python and 14 frontend tests.
+Regression checks cross the former 24-tile boundary, submit the larger state
+again, and preserve/replay burned area. They also verify configurable sampler
+eviction, rejection of over-budget state before source reads, cumulative patch
+admission before mosaic assembly, and configuration/request-size validation.
+Changing capacity preserves the existing source/physics identity. A two-patch
+test verifies that ignitions at minutes 0 and 30 burn out separately at minutes
+120 and 150, with active and burned patches coexisting in one summary cell.
+
+A real retained Colorado landscape with 36 tiles (324 km²) and 357,580 patches
+at 30 m resolution passed seed, 12-hour advancement and exact replay. This
+exceeds both the former 24-tile and 250,000-patch limits. Source loading took
+17.11 s and graph preparation 46.34 s; creating the first frame took 1.30 s.
+With that model prepared, advancement took 0.050 s and replay 0.033 s, excluding
+HTTP encoding and transfer. The frame serialized to 4.99 MB. Peak process RSS
+was 1,273 MiB. Other checks were running concurrently, so these timings are
+illustrative rather than isolated benchmarks. Burned area remained 299,700 m²,
+matching the same ignition in the smaller regional check. The local report is
+`artifacts/landscape-performance/larger-budget.json`.
+
+The default now permits 128 tiles (1,152 km²) and 1.5 million patches; the real
+benchmark above tests 36 tiles, not the full ceiling. Larger areas consume more
+RAM and require preparation when not cached. Browser regional checks also
+verify the burnout explanation and a deliberately overridden server limit
+(64 tiles / 576 km²), ensuring the UI does not hard-code the default.
 
 ### Commands
 

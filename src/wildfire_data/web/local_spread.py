@@ -76,6 +76,7 @@ class LocalScenarios:
     def configuration(self):
         return {'available': bool(self.regions) or bool(self.expanding), 'expanding': bool(self.expanding), 'kind': 'uncalibrated landscape scenario',
             'expanding_error': self.expanding_error,
+            'limits': self.expanding.configuration() if self.expanding else None,
             'presets': self.presets,
             'regions': [{'id': key, 'label': label, 'bounds': s.manifest['bounds_wgs84'],
                 'road_count': s.manifest.get('road_count'), 'known_width_count': s.manifest.get('road_width_known_count')}

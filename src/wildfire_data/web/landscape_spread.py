@@ -15,9 +15,17 @@ from shapely.ops import transform
 from wildfire_data.core.grid import TRAINING_GRID_CRS
 from wildfire_data.model.local_spread import LocalSpreadModel, LOCAL_VERSION
 from wildfire_data.model.features.fuel_barrier_features import projected_wind
-from wildfire_data.providers.landscape.tiles import LandscapeTiles, LandscapeMosaic, tile_key, tile_bounds
+from wildfire_data.providers.landscape.tiles import LandscapeTiles, LandscapeMosaic, TILE_METRES, tile_key, tile_bounds
 from wildfire_data.web.schemas import Input, SeedInput, BoundsInput, HistoricalFirmsInput, HistoricalContext, StepInput
 from wildfire_data.web.historical_firms import day_cutoff, LAST_DAY
+
+
+MAX_REQUEST_TILES = 512
+
+
+class LandscapeLimits(Input):
+    max_tiles: int = Field(default=128, ge=1, le=MAX_REQUEST_TILES, strict=True)
+    max_patches: int = Field(default=1500000, ge=1, le=5000000, strict=True)
 
 
 class TileInput(Input):
@@ -35,7 +43,7 @@ class ExpandingState(Input):
     profile: str = Field(pattern=r'^[0-9a-f]{64}$')
     incident_id: str = Field(pattern=r'^[0-9a-f]{64}$')
     ignitions: list[GeographicSeed] = Field(min_length=1, max_length=500)
-    tiles: list[TileInput] = Field(min_length=1, max_length=24)
+    tiles: list[TileInput] = Field(min_length=1, max_length=MAX_REQUEST_TILES)
     step_index: int = Field(ge=0, le=8, strict=True)
 
 
@@ -48,15 +56,20 @@ class ExpandingStep(Input):
 class ExpandingScenarios:
     def __init__(self, config, config_path, local):
         self.local = local
+        self.limits = LandscapeLimits(**{key: config[key] for key in LandscapeLimits.model_fields if key in config})
         parent = Path(config_path).resolve().parent
         archive = parent/config['road_archive'] if config.get('road_archive') else None
         self.store = LandscapeTiles(parent/config['source_config'], parent/config['data_root'], config['release'],
             road_archive=archive, road_archive_sha256=config.get('road_archive_sha256'),
-            raster_cache=parent/config['raster_cache'] if config.get('raster_cache') else None)
+            raster_cache=parent/config['raster_cache'] if config.get('raster_cache') else None,
+            max_cached_tiles=max(48, self.limits.max_tiles))
         self.profile = hashlib.sha256(f'expanding/v2:{LOCAL_VERSION}:{self.store.identity}:{local.policy.identity}:{local.mesh_m}'.encode()).hexdigest()
         self.to_grid = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
         self.tile_models, self.models = OrderedDict(), OrderedDict()
         self.prewarm_tiles = min(24, max(0, int(config.get('prewarm_tiles', 0))))
+
+    def configuration(self):
+        return {**self.limits.model_dump(), 'max_area_km2': self.limits.max_tiles * (TILE_METRES / 1000)**2}
 
     @staticmethod
     def retain(cache, key, model, *, max_entries, max_patches):
@@ -69,8 +82,9 @@ class ExpandingScenarios:
         key = sampler.sha256
         if key not in self.tile_models:
             model = LocalSpreadModel(sampler, self.local.policy, mesh_m=self.local.mesh_m,
-                                     max_patches=250000, allow_empty=True)
-            self.retain(self.tile_models, key, model, max_entries=48, max_patches=250000)
+                                     max_patches=min(250000, self.limits.max_patches), allow_empty=True)
+            self.retain(self.tile_models, key, model, max_entries=max(48, self.limits.max_tiles),
+                        max_patches=self.limits.max_patches)
             return model
         self.tile_models.move_to_end(key)
         return self.tile_models[key]
@@ -79,10 +93,17 @@ class ExpandingScenarios:
         ordered = [samplers[k] for k in sorted(samplers)]
         key = tuple(s.sha256 for s in ordered)
         if key not in self.models:
-            components = [self.tile_model(s) for s in ordered]
+            components, patches = [], 0
+            for sampler in ordered:
+                component = self.tile_model(sampler)
+                patches += len(component.patches)
+                if patches > self.limits.max_patches:
+                    raise ValueError(f'Landscape scenario reached its {self.limits.max_patches:,} fuel-patch budget. '
+                                     'Use a smaller area or increase expanding.max_patches on a server with sufficient memory; the previous frame is retained.')
+                components.append(component)
             model = LocalSpreadModel.join(LandscapeMosaic(ordered), self.local.policy,
-                components, mesh_m=self.local.mesh_m, max_patches=250000)
-            self.retain(self.models, key, model, max_entries=8, max_patches=500000)
+                components, mesh_m=self.local.mesh_m, max_patches=self.limits.max_patches)
+            self.retain(self.models, key, model, max_entries=8, max_patches=2*self.limits.max_patches)
             return model
         self.models.move_to_end(key)
         return self.models[key]
@@ -119,10 +140,15 @@ class ExpandingScenarios:
         self.tile_models.clear()
         self.store.close()
 
+    def check_tile_budget(self, count):
+        if count > self.limits.max_tiles:
+            area = self.configuration()['max_area_km2']
+            raise ValueError(f'Landscape scenario reached its {self.limits.max_tiles}-tile ({area:,.0f} km²) budget. '
+                             'Use a smaller area or increase expanding.max_tiles on a server with sufficient memory; the previous frame is retained.')
+
     def load(self, keys, samplers):
         keys = set(keys)-samplers.keys()
-        if len(keys)+len(samplers) > 24:
-            raise ValueError('Landscape scenario reached its 216 km² tile budget. Use fewer starting fires or a smaller map area; the previous frame is retained.')
+        self.check_tile_budget(len(keys)+len(samplers))
         for key in sorted(keys):
             samplers[key] = self.store.load(key)
 
@@ -195,7 +221,7 @@ class ExpandingScenarios:
         result.update(expanding=True, finished=step >= 8 or result['extinct'], boundary_reached=False,
             coverage={'type': 'Feature', 'geometry': mapping(transform(model.sampler.to_geo.transform, model.sampler.bounds)),
                       'properties': {'tiles': len(samplers)}})
-        result['metadata'].update(tile_count=len(samplers), coverage_mode='expands from offline road archive and retained NALCMS; no road network requests',
+        result['metadata'].update(tile_count=len(samplers), limits=self.configuration(), coverage_mode='expands from offline road archive and retained NALCMS; no road network requests',
                                   landscape_time_basis='current retained landscape, including for historical satellite scenarios')
         return result
 
@@ -211,6 +237,7 @@ class ExpandingScenarios:
             raise ValueError('Landscape simulation ends at 96 hours')
         if len({(t.x,t.y) for t in state.tiles}) != len(state.tiles):
             raise ValueError('Duplicate landscape tile state')
+        self.check_tile_budget(len(state.tiles))
         samplers = {(t.x,t.y): self.store.load((t.x,t.y), expected=t.sha256) for t in state.tiles}
         if body.historical and (origin != day_cutoff(body.historical.start_date) or state.step_index % 2):
             raise ValueError('Historical landscape origin or step changed')

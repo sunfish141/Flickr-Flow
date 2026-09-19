@@ -18,6 +18,7 @@ class LandscapeTileCacheTests(unittest.TestCase):
         self.store.data_root = Path(directory.name)
         self.store.identity = 'test-verified-source'
         self.store.samplers = OrderedDict()
+        self.store.max_cached_tiles = 48
         self.store.readers, self.store.reader_stack = {}, ExitStack()
         self.addCleanup(self.store.close)
         self.path = self.store.path((0,0))
@@ -49,3 +50,13 @@ class LandscapeTileCacheTests(unittest.TestCase):
         self.assertNotEqual(first.sha256, replacement.sha256)
         with self.assertRaisesRegex(ValueError, 'checksum'):
             self.store.load((0,0), expected=first.sha256)
+
+    def test_configured_sampler_cache_keeps_recent_tiles_and_evicts_oldest(self):
+        self.store.max_cached_tiles = 2
+        first = self.store.load((0,0))
+        for key in [(1,0), (2,0)]:
+            bundle(self.store.path(key).parent, bounds=tile_bounds(key))
+        self.store.load((1,0))
+        self.assertIs(self.store.load((0,0)), first)
+        self.store.load((2,0))
+        self.assertEqual(list(self.store.samplers), [(0,0), (2,0)])

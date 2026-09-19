@@ -12,7 +12,7 @@ The application is being rebuilt incrementally from `recreate-project-prompt.md`
    all map and source controls, and verify interactions with browser tests.
 
 All three implementation milestones are complete. The model run uses the
-real public release; **130 Python tests and 14 frontend tests pass**, saved-model
+real public release; **137 Python tests and 14 frontend tests pass**, saved-model
 evaluation reproduces all recorded scores, and real-model API replay is
 deterministic. Production-browser checks cover request cancellation, historical
 replay, keyboard controls, mobile layout and automated accessibility. See

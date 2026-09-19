@@ -59,8 +59,9 @@ to place a fire anywhere with supported vegetation, or open **Place by
 coordinates** to use the region's example near Black Hawk or Hinton. The general
 **Polygon spread · roads & fuel** mode remains available for other locations.
 Place a fire in supported vegetation, then use the usual step/playback controls.
-Roads and active/burned polygons appear on the map. Limits remain 24 tiles (216 km²),
-500 seeds and 96 simulated hours. Known road surface classes with missing widths
+Roads and active/burned polygons appear on the map. Default limits are 128 tiles
+(1,152 km²), 1.5 million fuel patches, 500 seeds and 96 simulated hours.
+Known road surface classes with missing widths
 use the configured 6 m assumption; unknown surfaces remain unsupported. This is
 an uncalibrated scenario with constant wind.
 
@@ -81,7 +82,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **130-test Python suite** covers integrity, atomic import, repeat startup,
+The **137-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.
@@ -114,13 +115,24 @@ warmup and the number of prepared tile graphs. Subsequent placement and satellit
 initialization reuse those road-cut fuel patches and connections directly.
 
 Verified tile samplers and prepared tile graphs are retained in memory, with
-48-entry limits and a 250,000-patch graph budget. Eight assembled models can
-retain at most 500,000 patch references. Expansion reuses existing tile graphs
+128-entry limits and a 1.5-million-patch graph budget by default. Eight assembled
+models can retain at most 3 million patch references. Expansion reuses existing tile graphs
 and computes only cross-tile connections. Source changes invalidate cache hits;
 unknown cover and road barriers retain their original semantics. Native tile
 files persist; in-memory graphs rebuild after restart. New areas still require
 tile extraction and preparation, so startup does not promise instant access to
 every location in Colorado and Alberta.
+
+`expanding.max_tiles` and `expanding.max_patches` control scenario capacity;
+restart after editing them. Sampler/tile cache capacity follows the tile limit
+(with a minimum of 48 entries); graph caches follow the patch limit, and assembled
+models share a budget twice that size. These are ceilings, not startup allocations.
+The default tile limit is over five times the former 216 km² limit. Supported
+configuration ranges are 1–512 tiles and 1–5,000,000 patches. Larger values need
+more RAM and preparation time; complex road cuts can reach the patch limit
+before the area limit. Keep both budgets in proportion to available resources.
+Requests fail explicitly on either limit and preserve the last completed frame.
+Changing capacity alone does not invalidate the scenario's source/physics identity.
 
 Explicit FIRMS loads continue when switching browser tabs. If another request
 is finishing preparation, the same browser request waits and retries; Pause
