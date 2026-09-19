@@ -36,11 +36,12 @@ def register_routes(app, runtime):
         for point in body.ignitions:
             cell_id = cell_from_wgs84(latitude=point.latitude, longitude=point.longitude).cell_id
             ignitions[cell_id] = max(ignitions.get(cell_id, 0), point.intensity)
+        origin = datetime.now(timezone.utc)
         try:
-            state = current.initial_state(ignitions)
+            state = current.initial_state(ignitions, origin_at=origin)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
-        return state_response(state, origin_at=datetime.now(timezone.utc))
+        return state_response(state, origin_at=origin)
 
     @app.post("/api/step")
     def step(body: StepInput):
@@ -94,7 +95,11 @@ def register_routes(app, runtime):
         if len(cells) > 10000:
             raise HTTPException(422, 'Too many starting cells. Load a smaller visible map area.')
         metadata.update(water_cells_excluded=len(state.active_cells) - len(cells), source='Historical NASA FIRMS')
-        response = state_response(replace(state, active_cells=cells), origin_at=origin, metadata=metadata)
+        prepared = replace(state, active_cells=cells)
+        if current is not None:
+            prepared = current.prepare_state(prepared, origin)
+        metadata['nonfuel_cells_excluded'] = len(cells) - len(prepared.active_cells)
+        response = state_response(prepared, origin_at=origin, metadata=metadata)
         historical['start_date'] = body.date.isoformat()
         response.update(historical=historical, finished=body.date == LAST_DAY)
         return response
@@ -123,7 +128,11 @@ def register_routes(app, runtime):
             # Low satellite brightness does not mean an observed fire has no
             # energy. Use the existing scale with a small positive seed floor.
             cells = tuple(replace(c, intensity=max(.1, c.intensity)) for c in cells)
-            response = state_response(replace(state, active_cells=cells), origin_at=now, metadata=metadata)
+            prepared = replace(state, active_cells=cells)
+            if current is not None:
+                prepared = current.prepare_state(prepared, now)
+            metadata['nonfuel_cells_excluded'] = len(cells) - len(prepared.active_cells)
+            response = state_response(prepared, origin_at=now, metadata=metadata)
             if len(runtime.firms_cache) >= 16:
                 runtime.firms_cache.pop(next(iter(runtime.firms_cache)))
             runtime.firms_cache[cache_key] = (now, response)

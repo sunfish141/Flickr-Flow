@@ -39,6 +39,16 @@
       "wetland": 0.25
     },
     "residence_minutes": 120.0,
+    "residence_minutes_by_fuel": {
+      "needleleaf": 240,
+      "broadleaf": 180,
+      "mixed_forest": 210,
+      "shrubland": 120,
+      "grassland": 60,
+      "wetland": 120,
+      "cropland": 60,
+      "other_vegetation": 120
+    },
     "spotting_distance_per_wind_m_s": 0.0,
     "unknown_road_width_m": 6.0,
     "wind_coefficient": 0.08,

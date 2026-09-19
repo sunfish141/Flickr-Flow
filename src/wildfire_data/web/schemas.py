@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from wildfire_data.core.grid import cell_from_id
 from wildfire_data.model.incident_transition import EvidenceCell
 from wildfire_data.model.recursive_transition import ActiveFireCell, RecursiveFireState
+from wildfire_data.model.fuel import FuelCell, FuelEvidenceCell
 
 
 class Input(BaseModel):
@@ -21,6 +22,9 @@ class CellInput(Input):
     remaining_active_steps: int = Field(ge=1, le=100000, strict=True)
     observation_age_hours: float = Field(ge=0, le=100000000)
     fuel_remaining: float = Field(default=1., ge=0, le=1)
+    burn_duration_hours: float | None = Field(default=None, gt=0, le=168)
+    vegetation_fraction: float | None = Field(default=None, ge=0, le=1)
+    fuel_basis: str | None = Field(default=None, max_length=80)
     detection_count: int | None = Field(default=None, ge=1, le=100000)
     bright_ti4_max: float | None = Field(default=None, ge=0, le=10000)
     bright_ti4_mean: float | None = Field(default=None, ge=0, le=10000)
@@ -38,12 +42,14 @@ class CellInput(Input):
 
     def to_cell(self):
         fields = self.model_dump(exclude_none=True)
+        if self.burn_duration_hours is None and (self.vegetation_fraction is not None or self.fuel_basis is not None):
+            raise ValueError('Fuel estimates require their assigned duration')
         evidence = [self.detection_count, self.bright_ti4_max, self.bright_ti4_mean, self.platform_count]
         if any(v is not None for v in evidence):
             if any(v is None for v in evidence):
                 raise ValueError("FIRMS cells require all observation aggregates")
-            return EvidenceCell(**fields)
-        return ActiveFireCell(**fields)
+            return (FuelEvidenceCell if self.burn_duration_hours is not None else EvidenceCell)(**fields)
+        return (FuelCell if self.burn_duration_hours is not None else ActiveFireCell)(**fields)
 
 
 class StateInput(Input):

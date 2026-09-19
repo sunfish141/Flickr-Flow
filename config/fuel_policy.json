@@ -1,0 +1,13 @@
+{
+  "hours_at_full_cover": {
+    "needleleaf": 72,
+    "broadleaf": 48,
+    "mixed_forest": 60,
+    "shrubland": 24,
+    "grassland": 12,
+    "wetland": 24,
+    "cropland": 12,
+    "other_vegetation": 24
+  },
+  "fallback_hours": 24
+}

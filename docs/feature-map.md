@@ -51,15 +51,21 @@ the load and its retries. Reset clears the scenario. Provider failures retain th
 last completed frame; rate-limited FIRMS requests show a bounded retry countdown.
 Historical comparison advances 24 hours per frame and stops at the final day.
 
-Burnout follows the model's simulated fuel policy. The 1 km model starts each
-new ignition with a uniform unit of fuel and consumes half per 12-hour step,
-normally reaching burned status after 24 hours. Polygon spread instead tracks
-arrival time for each patch and marks it burned after `residence_minutes`
-(currently 120 minutes). A summary cell can contain both active and burned
-patches and contribute to both counts. Historical daily frames do not reset
-these clocks. Burning durations are assumptions, not vegetation measurements;
-burned fuel cannot reignite within the same scenario. The Help dialog explains
-these differences and shows the configured polygon burning duration.
+Burnout follows each ignition's vegetation-based fuel estimate. The 1 km model
+uses land-cover type, mapped vegetation fraction and quality-supported canopy
+density; missing measurements use an explicit 24-hour fallback. Duration and
+evidence basis appear in the active-cell inspector. Polygon patches use
+fuel-specific durations of 60–240 minutes from their own ignition times.
+A summary cell can contain both active and burned patches and contribute to
+both counts. Historical daily frames do not reset these clocks. The Help dialog
+explains the assumptions; burned fuel cannot reignite within the same scenario.
+See [fuel duration and water barriers](fuel-and-water.md) for the exact rules.
+
+The 1 km model now combines the generalized coast/lake geometry with retained
+30 m land-cover water measurements. Whole water/mixed-shoreline cells are
+excluded from placement, satellite initialization and spread, and diagonal
+steps cannot cut between blocked river cells. Current retained water geography
+also applies to historical scenarios; fuel evidence keeps its origin cutoff.
 
 Road/fuel tiles and their prepared spread graphs stay in bounded memory caches.
 Startup prepares the regional examples and recent retained tiles before serving

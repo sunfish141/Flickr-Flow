@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 137 tests passed |
+| Python behavior/regression suite | 149 tests passed |
 | Frontend API, timeline and cancellation unit tests | 14 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -137,6 +137,42 @@ benchmark above tests 36 tiles, not the full ceiling. Larger areas consume more
 RAM and require preparation when not cached. Browser regional checks also
 verify the burnout explanation and a deliberately overridden server limit
 (64 tiles / 576 km²), ensuring the UI does not hard-code the default.
+
+### Native water and vegetation-dependent burnout
+
+The fuel/water checkpoint passed 149 Python and 14 frontend tests. New checks
+cover raster rivers absent from the generalized map, diagonal water-corner
+blocking, cleanup of submitted burned-water state, and water filtering in
+placement plus live/historical FIRMS APIs. Sharing the water raster cache does
+not make later-published vegetation eligible at an earlier fuel cutoff.
+Fuel tests verify type and density effects, missing versus zero fuel, partial
+coverage fallback, assignment to later ignitions, separate burnout clocks,
+API state roundtrip and exact replay without fuel refill. Polygon checks verify
+class-specific residence in both burnout and shared-gate travel.
+
+Real retained-data checks reproduced the reported Athabasca River gap near
+Fort McMurray: six sampled cells previously accepted by Natural Earth contained
+11.1%–74.5% NALCMS water and are now rejected. Lake Athabasca remains blocked;
+Dillon Reservoir and Grand Lake cells missed by the old map are now blocked.
+Reports are in `artifacts/fuel-water/water-probe.json`. After opening the source
+readers, individual sampled land-cover/fuel checks took about 13–43 ms, with
+repeat reads cached in memory; reader opening is primed at normal startup.
+
+The real-source Chromium check `tests/web/browser_fuel_water.py` verifies those
+API placement rejections, shows the assigned duration in the inspector, advances
+a Fort McMurray bank ignition through 48 hours and replays every frame exactly.
+The six known river cells appear in neither active/burned state nor candidates.
+The bank ignition received a 16.24-hour duration and became burned at the
+24-hour frame. A separate Colorado forest sample received 48.17 hours. These
+values illustrate the configured proxy, not observed fire durations.
+
+The numeric area/timing reports above describe their earlier policy checkpoints.
+Fuel-dependent durations intentionally change active-versus-burned area totals.
+Repeat the new check against a server with the retained native sources:
+
+```bash
+python tests/web/browser_fuel_water.py http://127.0.0.1:8000
+```
 
 ### Commands
 

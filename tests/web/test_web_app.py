@@ -47,8 +47,8 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(config['model_ready'])
         self.assertEqual(config['default_speed_seconds'], 3)
         self.assertIsNone(config['max_steps'])
-        self.assertEqual(config['transition']['maximum_active_steps'], 2)
-        self.assertEqual(config['transition']['transition_version'], 'water-barriers-finite-fuel/v3')
+        self.assertEqual(config['transition']['maximum_active_steps'], 6)
+        self.assertEqual(config['transition']['transition_version'], 'water-barriers-vegetation-fuel/v4')
         self.assertNotIn('MAP_KEY', config)
 
     def test_seed_step_and_stateless_replay(self):

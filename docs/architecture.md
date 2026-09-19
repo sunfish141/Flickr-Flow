@@ -45,8 +45,9 @@ disable warmup. This moves graph construction into startup for retained areas;
 new areas still require preparation. The cache is bounded, rather than a mesh
 of the entire state/province. Derived tile files persist on disk; prepared
 graphs are rebuilt into memory after restart. Cache eviction does not delete
-source files or change scenario state. Model v3 and expanding profile v2 require
-a fresh landscape scenario after upgrading.
+source files or change scenario state. Model v4 and expanding profile v2 require
+a fresh landscape scenario after upgrading. Class-specific polygon residence
+times are included in the policy identity.
 The CSV-only terrain provider returns explicit missingness outside the retained
 candidate-cell lookup; source rasters remain necessary for broader terrain,
 vegetation, historical observations and fine road geometry.
@@ -60,6 +61,16 @@ run manifests remain supported through explicit settings.
 The browser owns completed frames and playback timing. Request bodies contain
 the full versioned model state. The API does not maintain per-user sessions or
 silently truncate source data to fit display limits.
+
+The coarse preview's `model/fuel.py` assigns vegetation-based durations while
+leaving offline training transition classes unchanged. Fuel-aware active and
+evidence subclasses carry duration, vegetation fraction and basis through
+validated API state; source selection is frozen at origin and active durations
+are never refilled during replay. The shared inspector sampler supplies cached
+land-cover/canopy evidence. Its raw current land-cover reader also supplements
+the coarse Natural Earth barrier with NALCMS water, independently of historical
+fuel eligibility. Runtime wires and primes these readers before accepting
+requests. See [fuel and water contracts](fuel-and-water.md).
 
 `frontend/src/scenarioState.js` defines immutable timeline transitions. It keeps
 128 complete frames, seeks by absolute model step (including historical two-step

@@ -19,6 +19,8 @@ export default function Inspector({ point, frame, onClose, headingRef }) {
   if (frame.local) rows.push(['Active area', `${(point.active_area_m2 / 10000).toFixed(2)} ha`], ['Burned area', `${(point.burned_area_m2 / 10000).toFixed(2)} ha`]);
   else if (point.intensity != null) rows.push(['Scenario intensity', percent(point.intensity)]);
   if (point.fuel_remaining != null) rows.push(['Simulated fuel remaining', percent(point.fuel_remaining)]);
+  if (point.burn_duration_hours != null) rows.push(['Assigned burn duration', `${point.burn_duration_hours.toFixed(1)} h`], ['Fuel estimate basis', point.fuel_basis]);
+  if (point.vegetation_fraction != null) rows.push(['Vegetated fraction used for fuel', percent(point.vegetation_fraction)]);
   if (point.ignition_probability != null) rows.push(['Last-step spread probability', `${(point.ignition_probability * 100).toFixed(1)}%`]);
   if (point.observation_age_hours != null) rows.push(['Observation age', `${point.observation_age_hours.toFixed(1)} h`]);
   if (point.detection_count != null) rows.push(['FIRMS detections', point.detection_count]);
@@ -60,7 +62,7 @@ export default function Inspector({ point, frame, onClose, headingRef }) {
       <h3 id="vegetation-title">Vegetation</h3><p id="vegetation-status" role="status">{description}</p>
       {fraction != null && <meter id="vegetation-density" min="0" max="1" value={fraction} aria-label={data.density_fraction == null ? 'Mapped vegetated land fraction' : 'Vegetation cover fraction'} />}
       <Details rows={coverRows} id="vegetation-details" />
-      <p className="vegetation-note">Reference vegetation at scenario start. These estimates do not track fuel consumed by fire.</p>
+      <p className="vegetation-note">Reference vegetation at scenario start. The 1 km model uses supported cover estimates to assign a fuel duration; the measurements below remain unchanged as simulated fuel is consumed. Fuel amount and burning time are scenario estimates, not measured fuel mass.</p>
     </section><code id="point-id">{point.cell_id}</code>
   </section>;
 }

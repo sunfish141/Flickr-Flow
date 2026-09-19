@@ -107,6 +107,22 @@ class LocalSpreadTests(unittest.TestCase):
         arrivals = m.arrivals((0,))
         self.assertEqual(arrivals, {0: 0., 1: 100., 2: 200.})
 
+    def test_fuel_specific_patch_duration_applies_to_burnout_and_spread(self):
+        from wildfire_data.model.local_spread import VEGETATED
+        durations = {k: 240 if k == 'needleleaf' else 60 for k in VEGETATED}
+        sampler = bundle(self.temp.name, bounds=(0,0,90,30),
+                         cover=[(box(0,0,30,30),'grassland'), (box(30,0,90,30),'needleleaf')])
+        m = LocalSpreadModel(sampler, policy(residence_minutes_by_fuel=durations))
+        seed = min(range(len(m.centers)), key=lambda i: m.centers[i].x)
+        at_120 = m.frame((seed,), 120)
+        self.assertEqual((at_120['burned_patch_count'], at_120['active_patch_count']), (1,2))
+        self.assertEqual(m.frame((seed,), 300)['active_patch_count'], 0)
+        short = LocalSpreadModel(sampler, policy(residence_minutes_by_fuel={**durations, 'grassland': 1}))
+        self.assertEqual(short.arrivals((seed,)), {seed: 0.})
+        self.assertNotEqual(m.identity, short.identity)
+        with self.assertRaises(ValueError):
+            policy(residence_minutes_by_fuel={'grassland': 120})
+
     def test_joined_tiles_match_direct_mesh_with_roads_holes_and_wind(self):
         root = Path(self.temp.name)
         bounds = [(0,0,120,120),(120,0,240,120)]

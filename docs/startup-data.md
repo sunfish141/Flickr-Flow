@@ -65,6 +65,10 @@ Known road surface classes with missing widths
 use the configured 6 m assumption; unknown surfaces remain unsupported. This is
 an uncalibrated scenario with constant wind.
 
+Fuel-specific polygon burning durations and the shared native water mask are
+described in [fuel duration and water barriers](fuel-and-water.md). The coarse
+model also reads these cached vegetation sources to assign per-cell fuel clocks.
+
 `expanding.presets` in `config/local_spread.json` defines the regional map views
 and example coordinates. `/api/config` exposes those presets only when the
 expanding archive is available. The bounds are approximate view extents; they
@@ -82,7 +86,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **137-test Python suite** covers integrity, atomic import, repeat startup,
+The **149-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.

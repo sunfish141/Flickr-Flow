@@ -19,6 +19,9 @@ def state_response(state, *, origin_at, predictions=(), metadata=None, terrain_m
         points.append({"cell_id": cell_id, "latitude": lat, "longitude": lon, "status": status,
             "intensity": cell.intensity if cell else None,
             "fuel_remaining": cell.fuel_remaining if cell else None,
+            "burn_duration_hours": getattr(cell, 'burn_duration_hours', None),
+            "fuel_basis": getattr(cell, 'fuel_basis', None),
+            "vegetation_fraction": getattr(cell, 'vegetation_fraction', None),
             "ignition_probability": score.ignition_probability if score else None,
             "new_ignition": bool(score and score.will_ignite),
             "source": "FIRMS observation" if isinstance(cell, EvidenceCell) else "Placed ignition" if cell and state.step_index == 0 else "Simulation",
@@ -33,4 +36,3 @@ def state_response(state, *, origin_at, predictions=(), metadata=None, terrain_m
         "new_ignition_count": sum(p.will_ignite for p in predictions),
         "finished": False, "extinct": not active,
         "terrain_missing_count": terrain_missing, "metadata": metadata}
-

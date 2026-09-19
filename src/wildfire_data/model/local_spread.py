@@ -21,7 +21,7 @@ from shapely.strtree import STRtree
 from wildfire_data.core.grid import GridCell, cell_from_id
 from wildfire_data.model.features.fuel_barrier_features import polygons, projected_wind
 
-LOCAL_VERSION = 'local-fuel-patch-travel/v3'
+LOCAL_VERSION = 'local-fuel-patch-travel/v4'
 VEGETATED = ('needleleaf', 'broadleaf', 'mixed_forest', 'shrubland', 'grassland',
              'other_vegetation', 'wetland', 'cropland')
 
@@ -37,6 +37,7 @@ class TravelPolicy:
     unknown_road_width_m: float = 0.
     spotting_distance_per_wind_m_s: float = 0.
     max_spotting_distance_m: float = 0.
+    residence_minutes_by_fuel: dict | None = None
 
     def __post_init__(self):
         if set(self.rates_m_min) != set(VEGETATED):
@@ -45,6 +46,7 @@ class TravelPolicy:
             raise ValueError('Scenario rates must be finite and between 0 and 100 m/min')
         fields = asdict(self)
         fields.pop('rates_m_min')
+        fields.pop('residence_minutes_by_fuel')
         if any(not math.isfinite(v) for v in fields.values()):
             raise ValueError('Nonfinite scenario parameter')
         if not 1 <= self.residence_minutes <= 1440 or not 0 <= self.wind_coefficient <= .5:
@@ -55,6 +57,10 @@ class TravelPolicy:
             raise ValueError('Inferred road width must be 0–50 metres')
         if not 0 <= self.spotting_distance_per_wind_m_s <= 100 or not 0 <= self.max_spotting_distance_m <= 300:
             raise ValueError('Spotting scenario exceeds local support')
+        if self.residence_minutes_by_fuel is not None:
+            if set(self.residence_minutes_by_fuel) != set(VEGETATED) or any(
+                    not math.isfinite(v) or not 1 <= v <= 1440 for v in self.residence_minutes_by_fuel.values()):
+                raise ValueError('Supply a 1–1440 minute residence time for every fuel class')
 
     @property
     def identity(self):
@@ -140,6 +146,8 @@ class LocalSpreadModel:
         self._runtime()
 
     def _runtime(self):
+        durations = self.policy.residence_minutes_by_fuel
+        self.residence = [durations[p.fuel] if durations else self.policy.residence_minutes for p in self.patches]
         sampler, policy = self.sampler, self.policy
         lon, lat = sampler.to_geo.transform(*sampler.bounds.centroid.coords[0])
         self.wind = projected_wind(sampler.to_grid, (lat, lon), policy.wind_east_m_s, policy.wind_north_m_s)
@@ -286,7 +294,7 @@ class LocalSpreadModel:
                 else:
                     response = math.exp(max(-3., min(3., self.policy.wind_coefficient*self._projection(i, j))))
                     departure = first/(source_rate*response)
-                    if departure > self.policy.residence_minutes:
+                    if departure > self.residence[i]:
                         continue
                     delay = departure + second/(target_rate*response)
                 arrival = time + delay
@@ -305,7 +313,7 @@ class LocalSpreadModel:
             if arrival > elapsed_minutes:
                 continue
             patch = self.patches[i]
-            remaining = max(0., 1-(elapsed_minutes-arrival)/self.policy.residence_minutes)
+            remaining = max(0., 1-(elapsed_minutes-arrival)/self.residence[i])
             (active if remaining > 0 else burned).append(patch.geometry)
             record = cells.setdefault(patch.cell_id, {'active_area_m2': 0., 'burned_area_m2': 0.})
             record['active_area_m2' if remaining > 0 else 'burned_area_m2'] += patch.geometry.area

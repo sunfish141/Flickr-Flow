@@ -160,6 +160,58 @@ class InspectorRasterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
             InspectorSampler(None, self.config)
 
+    def test_app_applies_raster_water_to_placement_satellites_and_submitted_state(self):
+        from datetime import timedelta
+        from shapely.geometry import box
+        from wildfire_data.core.grid import GridCell, cell_from_id
+        from wildfire_data.model.features.landscape import Landscape
+        from wildfire_data.web.live_firms import aggregate_current_firms
+        from unittest.mock import Mock
+        land = GridCell(2,0).cell_id  # Raster nodata: explicit fallback, not water.
+        def rows(now):
+            return [{'latitude': cell_from_id(key).center_wgs84[0], 'longitude': cell_from_id(key).center_wgs84[1],
+                     'bright_ti4': 350, 'acquired_at': (now-timedelta(hours=6)).isoformat(),
+                     'provenance': {'product': 'VIIRS_SNPP_NRT'}} for key in (CELL, land)]
+        def live(key, bounds, *, now):
+            return aggregate_current_firms(rows(now), bounds, now=now)
+        historical = Mock(available=True)
+        def day(date, bounds):
+            origin = datetime(2026,5,12,tzinfo=timezone.utc)
+            return rows(origin), {'bounds': dict(zip(('west','south','east','north'),bounds)), 'date': date.isoformat(), 'points': []}
+        historical.load.side_effect = day
+        model = IncidentTransitionModel(SpreadEstimator(), feature_columns=RECURSIVE_MODEL_FEATURE_COLUMNS)
+        landscape = Landscape(land=[box(-179,24,-50,84)], lakes=[])
+        app = create_app(model=model, terrain_provider=terrain, landscape=landscape,
+                         vegetation_sampler=self.sampler, firms_loader=live, historical_store=historical,
+                         allowed_hosts=['testserver'])
+        with TestClient(app) as client:
+            lat, lon = cell_from_id(CELL).center_wgs84
+            placed = client.post('/api/seed', json={'ignitions': [{'latitude':lat,'longitude':lon,'intensity':.7}]})
+            self.assertEqual(placed.status_code, 422)
+            bounds = {'west':-97,'south':38,'east':-95,'north':41}
+            responses = [client.post('/api/firms', json=bounds),
+                         client.post('/api/firms/historical', json={'date':'2026-05-11','bounds':bounds})]
+            for response in responses:
+                self.assertEqual(response.status_code, 200, response.text)
+                frame = response.json()
+                self.assertEqual(frame['metadata']['water_cells_excluded'], 1)
+                self.assertEqual([p['cell_id'] for p in frame['points']], [land])
+                self.assertEqual(frame['points'][0]['burn_duration_hours'], 24)
+                self.assertEqual(frame['points'][0]['fuel_basis'], 'missing vegetation fallback')
+                step = client.post('/api/step', json={'state':frame['state'], 'origin_at':frame['origin_at']})
+                self.assertEqual(step.status_code, 200, step.text)
+                self.assertNotIn(CELL, [p['cell_id'] for p in step.json()['points']])
+            state = {'step_index': 0, 'active_cells': [], 'burned_cell_ids': [CELL]}
+            response = client.post('/api/step', json={'state': state, 'origin_at': ORIGIN})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['burned_count'], 0)
+
+    def test_shared_water_read_does_not_make_future_fuel_evidence_eligible(self):
+        record = self.sampler.land_cover_cell(CELL)
+        self.assertGreater(record['values']['vegetation_land_cover_water'], 0)
+        early = self.sampler.sample_cell(CELL, cutoff_at='2020-01-01T00:00:00Z', simulation_at='2020-01-01T00:00:00Z')
+        self.assertEqual(early['vegetation_land_cover_missing'], 1)
+
 
 class VegetationApiTests(unittest.TestCase):
     def setUp(self):

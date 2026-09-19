@@ -28,6 +28,14 @@ the reference benchmark, but the reused incident/region/time holdouts and
 satellite-dependent weak labels are not a new independent validation. Road
 training was unsupported by the retained historically eligible evidence.
 
+Burn durations now depend on vegetation class, mapped cover and usable canopy
+evidence, with a labeled fallback where evidence is missing. These are fuel
+proxies, not measured combustible mass or a calibrated residence-time model.
+Dead wood, litter and moisture remain unmeasured. The native 30 m water mask
+improves river/reservoir exclusion but excludes whole mixed 1 km shoreline
+cells; smaller unresolved channels can still be missed. See
+[fuel and water assumptions](fuel-and-water.md).
+
 ## Capabilities awaiting optional resources
 
 The local repository now contains trained public-CSV models and restored
@@ -61,7 +69,7 @@ but does not establish that its inputs were available during May–August.
 
 ## Verification and operation boundaries
 
-The checkpoint passed 137 Python tests, 14 frontend tests and production-browser
+The checkpoint passed 149 Python tests, 14 frontend tests and production-browser
 checks. Real API/browser checks used the trained coarse model and restored
 vegetation/road sources, including polygon expansion and replay. Large-display
 and historical browser cases used explicit fixtures; engine edge cases also

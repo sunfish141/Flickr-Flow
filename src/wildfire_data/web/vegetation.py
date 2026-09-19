@@ -1,4 +1,4 @@
-"""Small, display-only vegetation summaries from prediction-time evidence."""
+"""Shared cached vegetation evidence for inspection, fuel and water barriers."""
 
 import json
 import logging
@@ -61,6 +61,16 @@ class InspectorSampler:
                                       policy=self.policy, **context)
         if 'NALCMS' not in eligibility['vegetation_lineage']['selected']:
             return sample
+        record = self.land_cover_cell(cell_id)
+        land = select_features([record], policy=self.policy, **context)
+        lineage = sample['vegetation_lineage']
+        return {**sample, **{k: v for k, v in land.items() if k.startswith('vegetation_land_cover_')},
+                'vegetation_lineage': {**lineage,
+                    'selected': {**lineage['selected'], **land['vegetation_lineage']['selected']},
+                    'rejected': lineage['rejected'] + land['vegetation_lineage']['rejected']}}
+
+    def land_cover_cell(self, cell_id):
+        """Current retained geography; fuel selection separately enforces its cutoff."""
         with self._lock:
             if cell_id not in self._cache:
                 if self._raster is None:
@@ -69,13 +79,7 @@ class InspectorSampler:
                 if len(self._cache) > self._max_cached_cells:
                     self._cache.popitem(last=False)
             self._cache.move_to_end(cell_id)
-            record = self._cache[cell_id]
-        land = select_features([record], policy=self.policy, **context)
-        lineage = sample['vegetation_lineage']
-        return {**sample, **{k: v for k, v in land.items() if k.startswith('vegetation_land_cover_')},
-                'vegetation_lineage': {**lineage,
-                    'selected': {**lineage['selected'], **land['vegetation_lineage']['selected']},
-                    'rejected': lineage['rejected'] + land['vegetation_lineage']['rejected']}}
+            return self._cache[cell_id]
 
     def close(self):
         with self._lock:

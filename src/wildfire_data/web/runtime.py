@@ -11,6 +11,7 @@ from wildfire_data.model.loading import load_pass_model
 from wildfire_data.model.features.landscape import Landscape
 from wildfire_data.model.features.terrain_features import TerrainFeatureSampler
 from wildfire_data.model.spread import FireSpreadModel
+from wildfire_data.model.fuel import FuelPolicy
 from wildfire_data.core.model_artifacts import PUBLIC_MODEL_KIND, public_artifact
 from wildfire_data.providers.terrain_csv import CSVTerrainProvider
 from wildfire_data.web.historical_firms import HistoricalFirmsStore
@@ -92,6 +93,22 @@ class Runtime:
                     config_path=vegetation_config, raster_cache=raster_cache)
             except Exception:
                 logger.warning('Optional vegetation sources unavailable')
+        if self.model_error is None:
+            policy_path = REPOSITORY_ROOT / 'config/fuel_policy.json'
+            self.model.fuel_policy = FuelPolicy(**json.loads(policy_path.read_text()))
+            self.model.fuel_sampler = self.vegetation if callable(getattr(self.vegetation, 'sample_cell', None)) else None
+            if isinstance(self.model.landscape, Landscape) and hasattr(self.vegetation, 'land_cover_cell'):
+                self.model.landscape.use_land_cover(self.vegetation.land_cover_cell, self.vegetation.land_source['revision'])
+                if self.settings.prepare_data:
+                    from datetime import datetime, timezone
+                    from wildfire_data.core.grid import cell_from_wgs84
+                    origin = datetime.now(timezone.utc)
+                    for preset in self.local_scenarios.presets:
+                        point = preset.get('example_ignition')
+                        if point:
+                            cell = cell_from_wgs84(**point)
+                            self.model.landscape.allows_cell(cell.cell_id)
+                            self.model.fuel_estimate(cell.cell_id, origin)
 
     def close(self):
         self.local_scenarios.close()
@@ -99,6 +116,8 @@ class Runtime:
             self.vegetation.close()
         if hasattr(self.terrain, 'cache_clear'):
             self.terrain.cache_clear()
+        if hasattr(self.model, 'fuel_estimate'):
+            self.model.fuel_estimate.cache_clear()
         self.firms_cache.clear()
 
     def ready_model(self):

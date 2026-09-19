@@ -1,34 +1,55 @@
 """Simple fuel-limited preview using the retained spread classifier.
 
-Fuel is a dimensionless, uniform budget, not measured vegetation. Historical
+Fuel is a vegetation-based duration proxy, not measured fuel mass. Historical
 training/replay keeps its original transition; the map uses this transition.
 """
 
-from dataclasses import replace
+from dataclasses import asdict, replace
+from functools import lru_cache
 import math
 
 from wildfire_data.core.grid import cell_from_id, cells_in_square_radius
 from wildfire_data.core.hashing import stable_fraction
 from wildfire_data.model.incident_transition import IncidentTransitionModel
+from wildfire_data.model.fuel import FuelPolicy, with_fuel
 from wildfire_data.model.recursive_transition import (
     ActiveFireCell, CellTransitionPrediction, RecursiveFireState, RecursiveStepResult,
 )
 
 
-SPREAD_VERSION = "water-barriers-finite-fuel/v3"
+SPREAD_VERSION = "water-barriers-vegetation-fuel/v4"
 # Keep draws paired with v2 so changing fuel/evidence rules does not also
 # change the random realization used to assess those rules.
 IGNITION_SAMPLING_VERSION = "water-barriers-finite-fuel/v2"
 MIN_INTENSITY = .05
-FUEL_CONSUMPTION = .5  # Uniform budget consumed per 12 h; intensity is not fuel mass.
 
 
 class FireSpreadModel(IncidentTransitionModel):
     """No population quota: active count follows local ignition and burnout."""
 
-    def __init__(self, *args, landscape, **kwargs):
+    def __init__(self, *args, landscape, fuel_sampler=None, fuel_policy=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.landscape = landscape
+        self.fuel_sampler = fuel_sampler
+        self.fuel_policy = fuel_policy or FuelPolicy()
+        self.fuel_estimate = lru_cache(maxsize=16384)(self._fuel_estimate)
+
+    def _fuel_estimate(self, cell_id, origin_at):
+        sample = (self.fuel_sampler.sample_cell(cell_id, cutoff_at=origin_at, simulation_at=origin_at)
+                  if self.fuel_sampler is not None and origin_at is not None else None)
+        return self.fuel_policy.estimate(sample)
+
+    def prepare_cell(self, cell, origin_at):
+        # Preserve the fuel assigned at ignition, including on stateless replay.
+        if getattr(cell, 'burn_duration_hours', None) is not None:
+            return cell
+        estimate = self.fuel_estimate(cell.cell_id, origin_at)
+        return with_fuel(cell, estimate) if estimate.burn_duration_hours > 1e-9 else None
+
+    def prepare_state(self, state, origin_at):
+        active = [self.prepare_cell(c, origin_at) for c in state.active_cells if self.landscape.allows_cell(c.cell_id)]
+        return replace(state, active_cells=tuple(c for c in active if c is not None),
+                       burned_cell_ids=tuple(c for c in state.burned_cell_ids if self.landscape.allows_cell(c)))
 
     @classmethod
     def from_incident_model(cls, model, landscape):
@@ -41,22 +62,24 @@ class FireSpreadModel(IncidentTransitionModel):
     def transition_contract(self):
         return {"transition_version": SPREAD_VERSION, "time_step_hours": 12,
                 "ignition_threshold": self.ignition_threshold,
-                "fuel_consumption_per_step": FUEL_CONSUMPTION,
+                "fuel_consumption_per_step": "12 / assigned burn_duration_hours",
                 "minimum_intensity": MIN_INTENSITY,
                 "ignition_policy": "probability-sampling; deterministic per cell and step",
                 "ignition_sampling_version": IGNITION_SAMPLING_VERSION,
-                "fuel_policy": "uniform-unit-budget; constant-consumption; heuristic",
-                "maximum_active_steps": math.ceil(1 / FUEL_CONSUMPTION),
+                "fuel_policy": {"kind": "vegetation-duration-proxy/v1", **asdict(self.fuel_policy)},
+                "maximum_active_steps": math.ceil(max(self.fuel_policy.fallback_hours, *self.fuel_policy.hours_at_full_cover.values()) / 12),
                 "observation_policy": "preserve-age; eligible-only-within-3-to-24-hours",
                 "water_barrier": self.landscape.version}
 
-    def initial_state(self, ignitions, **kwargs):
+    def initial_state(self, ignitions, *, origin_at=None, **kwargs):
         if any(not self.landscape.allows_cell(cell_id) for cell_id in ignitions):
             raise ValueError("Place fires on mapped land, away from lakes and the ocean.")
         state = super().initial_state(ignitions, **kwargs)
-        return replace(state, active_cells=tuple(
-            replace(c, remaining_active_steps=math.ceil(c.fuel_remaining / FUEL_CONSUMPTION))
-            for c in state.active_cells if c.intensity >= MIN_INTENSITY))
+        state = replace(state, active_cells=tuple(c for c in state.active_cells if c.intensity >= MIN_INTENSITY))
+        prepared = self.prepare_state(state, origin_at)
+        if len(prepared.active_cells) != len(state.active_cells):
+            raise ValueError('Place fires in supported vegetation; this cell has no mapped vegetated fuel.')
+        return prepared
 
     def _neighbors(self, cell, active_by_id):
         return [active_by_id[n.cell_id] for n in cells_in_square_radius(cell, radius_cells=1)
@@ -81,15 +104,16 @@ class FireSpreadModel(IncidentTransitionModel):
 
     def step(self, state, *, terrain_provider, origin_at=None):
         # Also enforce barriers on submitted state, not only on new candidates.
-        active = {c.cell_id: c for c in state.active_cells
-                  if self.landscape.allows_cell(c.cell_id)}
+        state = self.prepare_state(state, origin_at)
+        active = {c.cell_id: c for c in state.active_cells}
         burned = set(state.burned_cell_ids)
         for cell_id, cell in tuple(active.items()):
-            if cell.intensity < MIN_INTENSITY or cell.fuel_remaining < MIN_INTENSITY:
+            if cell.intensity < MIN_INTENSITY or cell.fuel_remaining <= 1e-9:
                 burned.add(cell_id)
                 del active[cell_id]
         current = replace(state, active_cells=tuple(active.values()), burned_cell_ids=tuple(sorted(burned)))
-        candidates = self.candidate_cells(current)
+        candidates = tuple(c for c in self.candidate_cells(current)
+                           if self.fuel_estimate(c.cell_id, origin_at).burn_duration_hours > 1e-9)
         predictions, ignitions = [], []
         # Batch inference without pruning the frontier or imposing a birth quota.
         for start in range(0, len(candidates), 1024):
@@ -110,20 +134,16 @@ class FireSpreadModel(IncidentTransitionModel):
                 predictions.append(CellTransitionPrediction(cell.cell_id, lat, lon,
                     float(probability), will_ignite, intensity))
                 if will_ignite:
-                    ignitions.append(ActiveFireCell(cell.cell_id, intensity,
-                        math.ceil(1 / FUEL_CONSUMPTION), self.new_ignition_age_hours))
+                    ignitions.append(self.prepare_cell(ActiveFireCell(cell.cell_id, intensity,
+                        2, self.new_ignition_age_hours), origin_at))
         survivors = []
         for cell in active.values():
-            # A fading brightness proxy must not slow depletion and extend its
-            # own lifetime. Until residence time is learned, use a two-step
-            # uniform budget, matching the retained model's default duration.
-            fuel = max(0., cell.fuel_remaining - FUEL_CONSUMPTION)
-            intensity = min(cell.intensity, fuel)
-            if intensity < MIN_INTENSITY:
+            fuel = max(0., cell.fuel_remaining - 12 / cell.burn_duration_hours)
+            if fuel <= 1e-9:
                 burned.add(cell.cell_id)
             else:
-                survivors.append(replace(cell, fuel_remaining=fuel, intensity=intensity,
-                    remaining_active_steps=math.ceil(fuel / FUEL_CONSUMPTION),
+                survivors.append(replace(cell, fuel_remaining=fuel, intensity=max(MIN_INTENSITY, min(cell.intensity, fuel)),
+                    remaining_active_steps=math.ceil(fuel * cell.burn_duration_hours / 12 - 1e-9),
                     observation_age_hours=cell.observation_age_hours + 12))
         return RecursiveStepResult(SPREAD_VERSION, state.step_index,
             RecursiveFireState(state.step_index + 1,
