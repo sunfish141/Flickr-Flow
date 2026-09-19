@@ -10,9 +10,13 @@ web layer.
 ## Configuration selection
 
 Set variables in the environment of the server process before starting it.
-The app does not load `.env` files automatically. Relative environment paths
-are interpreted from the process working directory; run from the repository
-root when using the paths below.
+The live FIRMS credential also loads automatically from this repository's
+ignored `config/.env` when neither credential environment variable is nonempty.
+Only `NASA_FIRMS_API_KEY` and `MAP_KEY` are read from that file; no other settings
+are imported, no environment variables are modified, and no parent/sibling
+environment files are searched. Restart after changing credentials. Relative
+environment paths are interpreted from the process working directory; run from
+the repository root when using the paths below.
 
 | Setting | Selection and effect |
 | --- | --- |
@@ -26,7 +30,7 @@ root when using the paths below.
 | `WILDFIRE_LOCAL_CONFIG` | Local landscape configuration, default `config/local_spread.json` under the repository. Paths inside this JSON resolve relative to that JSON file. |
 | `WILDFIRE_VEGETATION_MANIFEST` | Explicit vegetation feature-store manifest. Without it, `config/vegetation_inspector.json` supplies the store reference and expected digest. National land-cover fallback still uses the source configuration named in that JSON. |
 | `WILDFIRE_ALLOWED_HOSTS` | Comma-separated accepted hostnames, default `localhost,127.0.0.1`. |
-| `NASA_FIRMS_API_KEY`, `MAP_KEY` | Server-side live FIRMS credential; the first nonempty value wins. Neither is needed for retained historical data. |
+| `NASA_FIRMS_API_KEY`, `MAP_KEY` | Server-side live FIRMS credential. Selection order: environment `NASA_FIRMS_API_KEY`, environment `MAP_KEY`, repository `config/.env` `NASA_FIRMS_API_KEY`, repository `config/.env` `MAP_KEY`; first nonempty value wins. Neither is needed for retained historical data. |
 | `TRAINING_CSV_DIR` | Training CLI dataset default, otherwise `htn_training`. CLI `--dataset` overrides it. This is not a runtime map source. |
 
 For example, explicitly select a locally trained run and local source root:

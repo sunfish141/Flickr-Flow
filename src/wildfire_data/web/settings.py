@@ -1,7 +1,9 @@
 """Portable settings; importing the application never reads another app's secrets."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
+
+from dotenv import dotenv_values
 
 from wildfire_data.core.paths import REPOSITORY_ROOT
 
@@ -14,7 +16,7 @@ class Settings:
     pass_name: str = 'pass_2'
     allowed_hosts: tuple[str, ...] = ('localhost', '127.0.0.1')
     vegetation_manifest: str | None = None
-    firms_key: str = ''
+    firms_key: str = field(default='', repr=False)
     prepare_data: bool = False
     download_vegetation: bool = True
     source_data_root: Path | None = None
@@ -22,6 +24,12 @@ class Settings:
     @classmethod
     def from_environment(cls):
         root = REPOSITORY_ROOT
+        # Read only this repository's optional credential file. Do not search
+        # parent directories or mutate the process environment.
+        firms_key = os.getenv('NASA_FIRMS_API_KEY') or os.getenv('MAP_KEY')
+        if not firms_key:
+            credentials = dotenv_values(root / 'config/.env', interpolate=False)
+            firms_key = credentials.get('NASA_FIRMS_API_KEY') or credentials.get('MAP_KEY') or ''
         # The sibling archive is an explicit deployment convenience, not a
         # dependency on the original application's source or environment file.
         default_assets = root.parent if (root.parent / 'data').is_dir() else root
@@ -36,7 +44,7 @@ class Settings:
             pass_name=os.getenv('WILDFIRE_MODEL_PASS', 'pass_2'),
             allowed_hosts=tuple(h.strip() for h in os.getenv('WILDFIRE_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()),
             vegetation_manifest=os.getenv('WILDFIRE_VEGETATION_MANIFEST'),
-            firms_key=os.getenv('NASA_FIRMS_API_KEY') or os.getenv('MAP_KEY') or '',
+            firms_key=firms_key,
             prepare_data=os.getenv('WILDFIRE_PREPARE_DATA', '1') != '0',
             download_vegetation=os.getenv('WILDFIRE_DOWNLOAD_VEGETATION', '1') != '0',
             source_data_root=Path(os.getenv('WILDFIRE_SOURCE_DATA_ROOT', str(root.parent / 'wildfiredetection/data'))),

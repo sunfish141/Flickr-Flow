@@ -81,7 +81,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **117-test Python suite** covers integrity, atomic import, repeat startup,
+The **122-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.

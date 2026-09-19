@@ -10,6 +10,12 @@
 | Vegetation inspector | Verified local vegetation stores/rasters |
 | Fine fuel/road simulation | Native fuel bundles or NALCMS plus offline indexed roads |
 
+Live FIRMS automatically reads the server credential from this repository's
+ignored `config/.env`, with process environment variables taking precedence.
+The normal startup command enables satellite loading when a key is present;
+restart after changing it. The key remains on the server and is never returned
+by `/api/config`. See [credential configuration](providers.md#configuration-selection).
+
 After public-CSV training, coarse placement works without another repository's
 source code or raw archive. Weather inference is available as a batch command
 over observed examples, not as map forecast weather. Historical/vegetation/fine

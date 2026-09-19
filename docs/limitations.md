@@ -61,12 +61,14 @@ but does not establish that its inputs were available during May–August.
 
 ## Verification and operation boundaries
 
-The checkpoint passed 117 Python tests, 11 frontend tests and production-browser
+The checkpoint passed 122 Python tests, 11 frontend tests and production-browser
 checks. Real API/browser checks used the trained coarse model and restored
 vegetation/road sources, including polygon expansion and replay. Large-display
 and historical browser cases used explicit fixtures; engine edge cases also
-have synthetic tests. Live NASA and real historical archive integration remain
-separate from these checks.
+have synthetic tests. Separate live NASA checks succeeded for Alberta and
+Colorado using all three VIIRS streams after enabling the repository-local
+credential. Real historical archive integration remains separate from these
+checks.
 Automated accessibility checks found no violations in the tested states;
 manual assistive-technology testing remains separate. See [verification](verification.md).
 

@@ -72,8 +72,11 @@ landscape/vegetation configurations use relative paths under `config/`.
 Adjust these when relocating sources. Missing resources disable the affected
 capability; they never produce fabricated predictions.
 
-Live FIRMS needs `NASA_FIRMS_API_KEY` or `MAP_KEY` in the server environment.
-This app deliberately does not read another application's environment file.
+Live FIRMS reads `NASA_FIRMS_API_KEY` or `MAP_KEY` from the server environment,
+falling back to this repository's ignored `config/.env`. Restart the server after
+changing the key; the usual uvicorn command loads it automatically. Only the
+FIRMS credential is read from that file, and process environment values take
+precedence. The app does not read another application's environment file.
 Historical observations and offline simulations do not require the live key.
 See [provider contracts and configuration](docs/providers.md) for the exact
 selection rules, expected source paths and injection interfaces. See
@@ -131,7 +134,7 @@ node --test frontend/tests/*.test.js
 Tests include the reference behavior contracts for grid identity, finite-fuel
 spread, local road barriers, HTTP validation, live observations, and historical
 comparison. Runtime preparation uses a single worker and bounded shared caches.
-The verified checkpoint passes 117 Python tests, 11 frontend tests, and production
+The verified checkpoint passes 122 Python tests, 11 frontend tests, and production
 Chromium checks for playback races, historical replay, 128-frame history,
 2,000-cell displays, keyboard focus and mobile layout. See
 [verification instructions and fixture boundaries](docs/verification.md) to

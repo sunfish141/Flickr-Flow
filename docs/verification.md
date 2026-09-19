@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 117 tests passed |
+| Python behavior/regression suite | 122 tests passed |
 | Frontend API, timeline and cancellation unit tests | 11 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -55,6 +55,19 @@ historical controls without contacting NASA. Reports and frames are under
 `artifacts/regional-landscape/browser/`; see the
 [regional measurements](startup-data.md#colorado-and-alberta-verification).
 
+Live FIRMS was verified separately on September 19, 2026 after fixing startup to
+read this repository's `config/.env`. Real requests to all three VIIRS feeds
+returned 165 eligible detections in 50 cells for the Alberta query and 15 in nine
+cells for the Colorado query. These counts describe the 3–24-hour observation
+window at verification time; they are not forecasts and change over time.
+
+Chromium also loaded real current observations through the visible-area FIRMS
+button and initialized the expanding polygon scenario around an observed Alberta
+cell, with no JavaScript errors. The smoke test intercepts only basemap images;
+satellite responses come from NASA. Reports and screenshots are stored under
+`artifacts/live-firms/`. Five settings tests cover local credentials, environment
+precedence, absent keys, file isolation and keeping credentials out of API output.
+
 ## Repeat the checks
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in
@@ -90,3 +103,15 @@ Startup now restores or prepares vegetation and road sources; the local copy
 has passed real-data checks. Real historical comparisons still require their
 retained source archive. Models and source data are ignored artifacts; syncing
 code alone does not transfer them.
+
+For an opt-in live NASA check, supply coordinates near **current** detections in
+supported vegetation, with observations 3–24 hours old:
+
+```bash
+python tests/web/browser_live_firms.py http://127.0.0.1:8001 \
+  --latitude 53.516113169352934 --longitude -115.54892759738583
+```
+
+Those example coordinates were used for the September 19 check. Choose another
+current detection area if they are now empty. The live test requires a valid
+server credential and provider connectivity; it is separate from fixture tests.
