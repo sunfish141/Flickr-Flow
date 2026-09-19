@@ -1,0 +1,62 @@
+{
+  "base_candidate_csv_sha256": "cabc71a9c1b0356b5eef3bd8e32843f7bf92c1301ab8724d6d94931385723c7a",
+  "base_release": "releases/wildfire-spread-firms-feds-boreal-no-weather-2026-05-11_to_2026-08-22",
+  "base_release_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26",
+  "candidate_manifest": {
+    "build_id": "5683d45f5fb44b2cbca87b2e3d5fbd95",
+    "content_sha256": "af5e268a0039e5fd3b86d0ef14ce2ef37fd9e54beafdbafd71da126880655c3a",
+    "relative_path": "manifests/candidate-dataset-builds/2026/09/07/210602697023_5683d45f5fb44b2cbca87b2e3d5fbd95.json"
+  },
+  "candidate_row_count": 500364,
+  "feature_contract": {
+    "feature_columns": [
+      "firms_local_3x3_has_detection",
+      "firms_local_3x3_detection_count",
+      "firms_local_3x3_bright_ti4_max",
+      "firms_local_3x3_bright_ti4_mean",
+      "firms_local_3x3_platform_count",
+      "firms_local_3x3_hours_since_last_detection",
+      "firms_local_3x3_active_cell_count",
+      "terrain_valid",
+      "terrain_elevation_m",
+      "terrain_slope_degrees",
+      "terrain_aspect_defined",
+      "terrain_aspect_sin",
+      "terrain_aspect_cos",
+      "weather_temperature_2m",
+      "weather_relative_humidity_2m",
+      "weather_precipitation",
+      "weather_wind_u_10m",
+      "weather_wind_v_10m"
+    ],
+    "feature_set": "offline-frontier-weather-hourly/v1",
+    "prediction_scope": "observed-row next-12-hour newly-burned probability",
+    "weather_hour_policy": "floor-anchor-to-utc-hour/v1",
+    "weather_missing_policy": "reject missing or nonfinite core weather",
+    "weather_mode": "historical_analysis",
+    "weather_model": "ecmwf_ifs",
+    "weather_units": {
+      "weather_precipitation": "mm",
+      "weather_relative_humidity_2m": "%",
+      "weather_temperature_2m": "\u00b0C",
+      "weather_wind_u_10m": "m/s",
+      "weather_wind_v_10m": "m/s"
+    }
+  },
+  "files": {
+    "audit.json": "f64d888431e13f2d70b3b47c5d061f5b60dd26ca16b6b8d785e5624dc5ed2ae6",
+    "source_inventory.json": "15e85b7e1d1844429050a4da6bd90f418dcb0167683bb0b0e8521f7420ac20e3",
+    "weather_features.csv.gz": "f0b943888cc975d2b883efebfdf57f8cfe4f1a98afc8bf7080901949ce189dec"
+  },
+  "join_key": "example_id with exact identity-column verification",
+  "kind": "completed-weather-training-sidecar/v1",
+  "limitations": [
+    "Retrospective historical analysis, not an issued forecast.",
+    "FEDS/FIRMS dependent weak labels; zero targets remain weak-negative proxies.",
+    "This training view does not provide weather to arbitrary simulated cells."
+  ],
+  "schema_version": 1,
+  "status": "complete",
+  "weather_backfill_manifest": "data/manifests/open-meteo-historical-weather-backfills/2026/09/15/212640090946_388138bb1f1d4a00824c49d66628a4e0.json",
+  "weather_backfill_manifest_sha256": "91ac1f71c5854c41ebc6dca3c000bdb83e873f07a6b29d80373870658178ac0e"
+}

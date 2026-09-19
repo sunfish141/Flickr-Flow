@@ -1,0 +1,45 @@
+{
+  "mesh_m": 30,
+  "expanding": {
+    "enabled": true,
+    "source_config": "vegetation_inspector_sources.json",
+    "data_root": "../data",
+    "release": "2026-08-19.0",
+    "road_archive": "../data/raw/overture-road-archive/us-ca-2026-08-19.0/manifest.json",
+    "road_archive_sha256": "1eb24da20ec52d990a05d5decf635f6381bc2abbbff8870eec3e710fea58db47",
+    "raster_cache": "../data/static/nalcms-runtime/manifest.json"
+  },
+  "policy": {
+    "max_spotting_distance_m": 0.0,
+    "rates_m_min": {
+      "broadleaf": 0.5,
+      "cropland": 1.0,
+      "grassland": 2.0,
+      "mixed_forest": 0.5,
+      "needleleaf": 0.5,
+      "other_vegetation": 1.0,
+      "shrubland": 1.0,
+      "wetland": 0.25
+    },
+    "residence_minutes": 120.0,
+    "spotting_distance_per_wind_m_s": 0.0,
+    "unknown_road_width_m": 6.0,
+    "wind_coefficient": 0.08,
+    "wind_east_m_s": 0.0,
+    "wind_north_m_s": 0.0
+  },
+  "regions": [
+    {
+      "id": "edson",
+      "label": "Edson, Alberta",
+      "manifest": "../data/landscape/edson-pilot-20260916/v2/manifest.json",
+      "sha256": "f8f9f5a971e4a62bb8a9f2ee908194d763d987ae43922eae7fa4373b9aca5d2c"
+    },
+    {
+      "id": "boulder",
+      "label": "Boulder, Colorado",
+      "manifest": "../data/landscape/boulder-pilot-20260916/v2/manifest.json",
+      "sha256": "869fe931f32d356e663c5d656b1d6520a35b03e2e0cc4221737f45e521fc6735"
+    }
+  ]
+}

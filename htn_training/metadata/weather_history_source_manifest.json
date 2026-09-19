@@ -1,0 +1,23 @@
+{
+  "columns": [
+    "weather_rain_6h_mm",
+    "weather_rain_24h_mm",
+    "weather_rh_min_24h",
+    "weather_vpd_mean_24h",
+    "weather_wind_u_mean_6h",
+    "weather_wind_v_mean_6h",
+    "weather_wind_speed_mean_6h",
+    "weather_wind_speed_max_6h",
+    "weather_wind_steadiness_6h"
+  ],
+  "files": {
+    "audit.json": "a51e36566b399133dfd6d0a828407728e66a40853f3df2d5e5b5f63ac08857bb",
+    "history.csv.gz": "460af503486463774a2f72b759cef8571ff485c36dbf8968d1c155300fb3487d",
+    "source_inventory.json": "37cba1f078eaf9f95049baff1abbb55269a7ae0b1ba3f92ec969fcaf263a003d"
+  },
+  "kind": "completed-weather-history-sidecar/v1",
+  "rows": 500364,
+  "status": "complete",
+  "weather_manifest": "data/derived/weather-training-20260916/dataset_manifest.json",
+  "weather_manifest_sha256": "55e9375a5d1549f7394e0a2aedb32fe5b6b43ca9574d16d34f625059e30681d0"
+}

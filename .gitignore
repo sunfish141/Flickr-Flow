@@ -1,0 +1,17 @@
+__pycache__/
+.ipynb_checkpoints/
+.env
+*.csv
+*.png
+.venv
+*.gz
+!src/wildfire_data/model/features/resources/north-america-water.geojson.gz
+*.joblib
+artifacts/
+releases/
+config/*
+!config/vegetation_inspector.json
+!config/vegetation_inspector_sources.json
+!config/local_spread.json
+data/
+node_modules/

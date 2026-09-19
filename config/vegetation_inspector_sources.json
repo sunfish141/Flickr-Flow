@@ -1,0 +1,83 @@
+{
+  "sources": [
+    {
+      "source_id": "nalcms-northamerica-2020-v2",
+      "product": "NALCMS",
+      "version": "2020 v2",
+      "revision": "0a2c67e144d2c0292c9686114894321748b1ed2b0d37f99cb6c40bce2601c6d9",
+      "observation_start": "2019-01-01T00:00:00Z",
+      "observation_end": "2022-01-01T00:00:00Z",
+      "component_years": {
+        "Alaska": 2021,
+        "CONUS": 2019,
+        "Canada": 2020
+      },
+      "available_at": "2026-09-09T16:31:00.778963+00:00",
+      "retrieved_at": "2026-09-09T16:31:00.778963+00:00",
+      "availability_basis": "captured-response",
+      "availability_evidence": [
+        {
+          "raw_manifest": "data/manifests/raw/cec-nalcms-land-cover/2026/09/09/2026-09-09T030021.930299Z_2eefdae72cf3_aec539add4074162b2747a9c62b43562.json",
+          "raw_manifest_sha256": "ee614b5829268e6af47a368d8bf64e07ad273255e7067090eba14e2cffd74b21",
+          "provider_sha256": "2eefdae72cf3728f60c1efa14bdd984abc2d671664340aeaea51a85a589275e4",
+          "source_url": "https://www.cec.org/files/atlas_layers/1_terrestrial_ecosystems/1_01_0_land_cover_2020_30m/usa_land_cover_2020v2_30m_tif.zip"
+        },
+        {
+          "raw_manifest": "data/manifests/raw/cec-nalcms-land-cover/2026/09/09/2026-09-09T030021.930299Z_d735d0f587b2_c30d1b526fe64ec4b5f5969146a1103e.json",
+          "raw_manifest_sha256": "e5ff864271af6afc648ad862a19b18569e9d9d0c008550bf7c866e07dbb1bfdf",
+          "provider_sha256": "d735d0f587b20a9bedbb2446669b29966f2c927c43925fe9c9d9802287bd04a4",
+          "source_url": "https://www.cec.org/files/atlas_layers/1_terrestrial_ecosystems/1_01_0_land_cover_2020_30m/can_land_cover_2020v2_30m_tif.zip"
+        }
+      ],
+      "qa_policy": "conservative-vegetation-QA/v1",
+      "assets": [
+        {
+          "path": "../data/raw/cec-nalcms-land-cover/2eefdae72cf3728f60c1efa14bdd984abc2d671664340aeaea51a85a589275e4.gz",
+          "member": "usa_land_cover_2020v2_30m_tif/ASK_NALCMS_landcover_2020v2_30m/data/ASK_NALCMS_landcover_2020v2_30m.tif",
+          "sha256": "739308a231ca0868704f7d32098a69d79bc07aa902aef494715b324232a3724f",
+          "bands": {
+            "land_cover": 1
+          },
+          "country": "United States",
+          "component_years": {
+            "Alaska": 2021,
+            "CONUS": 2019
+          }
+        },
+        {
+          "path": "../data/raw/cec-nalcms-land-cover/2eefdae72cf3728f60c1efa14bdd984abc2d671664340aeaea51a85a589275e4.gz",
+          "member": "usa_land_cover_2020v2_30m_tif/USA_NALCMS_landcover_2020v2_30m/data/USA_NALCMS_landcover_2020v2_30m.tif",
+          "sha256": "739308a231ca0868704f7d32098a69d79bc07aa902aef494715b324232a3724f",
+          "bands": {
+            "land_cover": 1
+          },
+          "country": "United States",
+          "component_years": {
+            "Alaska": 2021,
+            "CONUS": 2019
+          }
+        },
+        {
+          "path": "../data/raw/cec-nalcms-land-cover/d735d0f587b20a9bedbb2446669b29966f2c927c43925fe9c9d9802287bd04a4.gz",
+          "member": "can_land_cover_2020v2_30m_tif/CAN_NALCMS_landcover_2020v2_30m/data/CAN_NALCMS_landcover_2020v2_30m.tif",
+          "sha256": "0e5da0356f473ebd2b718d5f73256f2cb6324c55292ee0d338022933c1010473",
+          "bands": {
+            "land_cover": 1
+          },
+          "country": "Canada",
+          "component_years": {
+            "Canada": 2020
+          }
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "max_age_days": {
+      "NALCMS": 3650,
+      "MOD44B": 1000,
+      "MOD13Q1": 64
+    },
+    "min_valid_fraction": 0.25
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "land_cover_sources_path": "vegetation_inspector_sources.json",
+  "manifest_path": "../data/vegetation/fb0513cbb40f1af6669e1f98ee9c867978bd4a3f37546052fa6974197548e005/manifest.json",
+  "manifest_sha256": "d2bff985ef246f49f08bdc39cbf1f529c059d499cc663845f39d6017447bf359"
+}

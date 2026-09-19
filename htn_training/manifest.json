@@ -1,0 +1,568 @@
+{
+  "status": "complete",
+  "kind": "plain-training-csv-collection/v1",
+  "source_snapshot_start_date": "2026-05-11",
+  "source_snapshot_end_date": "2026-08-22",
+  "join_key": "example_id",
+  "candidate_row_count": 500364,
+  "total_csv_bytes": 4172833952,
+  "files": [
+    {
+      "path": "candidate_examples.csv",
+      "row_count": 500364,
+      "columns": [
+        "anchor_at",
+        "availability_lag_hours",
+        "binary_training_eligible",
+        "binary_training_status",
+        "candidate_dataset_build_version",
+        "candidate_dataset_schema_version",
+        "candidate_sampler_version",
+        "candidate_seed_count",
+        "candidate_seed_detection_id_count",
+        "candidate_seed_detection_ids",
+        "candidate_seed_detection_ids_sha256",
+        "candidate_seed_detection_ids_truncated",
+        "candidate_seed_raw_artifact_ids",
+        "candidate_selection_reason",
+        "candidate_source",
+        "cell_center_latitude",
+        "cell_center_longitude",
+        "cell_id",
+        "contributing_fire_count",
+        "cutoff_at",
+        "dataset_split",
+        "example_id",
+        "feature_build_version",
+        "feature_cutoff_at",
+        "feature_source",
+        "feds_snapshot_context_raw_artifact_ids",
+        "firms_center_bright_ti4_max",
+        "firms_center_bright_ti4_mean",
+        "firms_center_detection_count",
+        "firms_center_has_detection",
+        "firms_center_hours_since_last_detection",
+        "firms_center_platform_count",
+        "firms_feature_policy",
+        "firms_local_3x3_active_cell_count",
+        "firms_local_3x3_bright_ti4_max",
+        "firms_local_3x3_bright_ti4_mean",
+        "firms_local_3x3_detection_count",
+        "firms_local_3x3_has_detection",
+        "firms_local_3x3_hours_since_last_detection",
+        "firms_local_3x3_platform_count",
+        "firms_raw_artifact_ids",
+        "label_build_version",
+        "label_observability",
+        "label_quality_score",
+        "label_raw_artifact_ids",
+        "label_source",
+        "label_status",
+        "label_tier",
+        "latest_eligible_acquisition_at",
+        "lookback_hours",
+        "lookback_start_at",
+        "positive_overlap_fraction",
+        "prediction_horizon_hours",
+        "record_type",
+        "schema_version",
+        "source_snapshot_time",
+        "source_time_semantics",
+        "source_window_policy",
+        "target_end_at",
+        "target_newly_burned_12h",
+        "target_snapshot_time",
+        "terrain_aspect_convention",
+        "terrain_aspect_cos",
+        "terrain_aspect_defined",
+        "terrain_aspect_sin",
+        "terrain_coverage_status",
+        "terrain_elevation_m",
+        "terrain_feature_schema_version",
+        "terrain_sampling_method",
+        "terrain_slope_degrees",
+        "terrain_source_artifact",
+        "terrain_source_block_id",
+        "terrain_source_pixel_column",
+        "terrain_source_pixel_row",
+        "terrain_source_resolution_degrees",
+        "terrain_valid",
+        "time_alignment_mode",
+        "training_dataset_build_version",
+        "training_dataset_schema_version",
+        "training_grid",
+        "weather_available",
+        "weather_feature_status",
+        "weather_input_policy",
+        "weather_missing_indicator",
+        "weather_missing_reason"
+      ],
+      "bytes": 2913622129,
+      "sha256": "8df1ab756ff03271b93cc7a3e5e701982ea655890980cb19ec4aba382aa50145",
+      "source_path": "releases/wildfire-spread-firms-feds-boreal-no-weather-2026-05-11_to_2026-08-22/candidate_examples.csv.gz",
+      "source_sha256": "cabc71a9c1b0356b5eef3bd8e32843f7bf92c1301ab8724d6d94931385723c7a",
+      "source_manifest": "metadata/candidate_examples_source_manifest.json",
+      "source_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {
+        "source_snapshot_time": [
+          "2026-05-11T12:00:00Z",
+          "2026-08-22T12:00:00Z"
+        ],
+        "anchor_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "feature_cutoff_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "target_end_at": [
+          "2026-05-12T06:19:27.787647Z",
+          "2026-08-23T12:26:20.218755Z"
+        ]
+      },
+      "split_counts": {
+        "train": 402671,
+        "validation": 97693
+      },
+      "target_counts": {
+        "0": 408000,
+        "1": 92364
+      },
+      "missing_flag_counts": {},
+      "original_source_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26"
+    },
+    {
+      "path": "unscored_positives.csv",
+      "row_count": 35265,
+      "columns": [
+        "anchor_at",
+        "availability_lag_hours",
+        "binary_training_eligible",
+        "binary_training_status",
+        "candidate_dataset_build_version",
+        "candidate_dataset_schema_version",
+        "candidate_sampler_version",
+        "candidate_selection_reason",
+        "cell_center_latitude",
+        "cell_center_longitude",
+        "cell_id",
+        "contributing_fire_count",
+        "cutoff_at",
+        "dataset_split",
+        "example_id",
+        "feature_build_version",
+        "feature_cutoff_at",
+        "feature_source",
+        "feds_snapshot_context_raw_artifact_ids",
+        "firms_center_bright_ti4_max",
+        "firms_center_bright_ti4_mean",
+        "firms_center_detection_count",
+        "firms_center_has_detection",
+        "firms_center_hours_since_last_detection",
+        "firms_center_platform_count",
+        "firms_local_3x3_active_cell_count",
+        "firms_local_3x3_bright_ti4_max",
+        "firms_local_3x3_bright_ti4_mean",
+        "firms_local_3x3_detection_count",
+        "firms_local_3x3_has_detection",
+        "firms_local_3x3_hours_since_last_detection",
+        "firms_local_3x3_platform_count",
+        "firms_raw_artifact_ids",
+        "label_build_version",
+        "label_observability",
+        "label_quality_score",
+        "label_raw_artifact_ids",
+        "label_source",
+        "label_status",
+        "label_tier",
+        "latest_eligible_acquisition_at",
+        "lookback_hours",
+        "lookback_start_at",
+        "positive_overlap_fraction",
+        "prediction_horizon_hours",
+        "record_type",
+        "schema_version",
+        "source_snapshot_time",
+        "source_time_semantics",
+        "source_window_policy",
+        "target_end_at",
+        "target_newly_burned_12h",
+        "target_snapshot_time",
+        "terrain_aspect_convention",
+        "terrain_aspect_cos",
+        "terrain_aspect_defined",
+        "terrain_aspect_sin",
+        "terrain_coverage_status",
+        "terrain_elevation_m",
+        "terrain_feature_schema_version",
+        "terrain_sampling_method",
+        "terrain_slope_degrees",
+        "terrain_source_artifact",
+        "terrain_source_block_id",
+        "terrain_source_pixel_column",
+        "terrain_source_pixel_row",
+        "terrain_source_resolution_degrees",
+        "terrain_valid",
+        "time_alignment_mode",
+        "training_dataset_build_version",
+        "training_dataset_schema_version",
+        "training_grid",
+        "weather_available",
+        "weather_feature_status",
+        "weather_input_policy",
+        "weather_missing_indicator",
+        "weather_missing_reason"
+      ],
+      "bytes": 199966234,
+      "sha256": "eefc350b294966b01601ce9f9a679616dd1d3b2530458a89740ab6f3c59de982",
+      "source_path": "releases/wildfire-spread-firms-feds-boreal-no-weather-2026-05-11_to_2026-08-22/unscored_positives.csv.gz",
+      "source_sha256": "75ca2731009d43181cf87e8d99c2416c9da2c9360481916395e95eb562940da3",
+      "source_manifest": "metadata/unscored_positives_source_manifest.json",
+      "source_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {
+        "source_snapshot_time": [
+          "2026-05-11T12:00:00Z",
+          "2026-08-22T12:00:00Z"
+        ],
+        "anchor_at": [
+          "2026-05-11T19:45:35.457113Z",
+          "2026-08-22T21:41:46.559298Z"
+        ],
+        "feature_cutoff_at": [
+          "2026-05-11T19:45:35.457113Z",
+          "2026-08-22T21:41:46.559298Z"
+        ],
+        "target_end_at": [
+          "2026-05-12T07:45:35.457113Z",
+          "2026-08-23T09:41:46.559298Z"
+        ]
+      },
+      "split_counts": {
+        "train": 31420,
+        "validation": 3845
+      },
+      "target_counts": {
+        "1": 35265
+      },
+      "missing_flag_counts": {},
+      "original_source_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26"
+    },
+    {
+      "path": "weather_features.csv",
+      "row_count": 500364,
+      "columns": [
+        "example_id",
+        "cell_id",
+        "source_snapshot_time",
+        "anchor_at",
+        "feature_cutoff_at",
+        "target_end_at",
+        "target_newly_burned_12h",
+        "weather_temperature_2m",
+        "weather_relative_humidity_2m",
+        "weather_precipitation",
+        "weather_wind_u_10m",
+        "weather_wind_v_10m",
+        "weather_observed_at",
+        "weather_tile_id",
+        "weather_source_grid_id",
+        "weather_tile_distance_m",
+        "weather_raw_artifact_ids",
+        "weather_mapping_raw_artifact_id"
+      ],
+      "bytes": 267839598,
+      "sha256": "51b505d1e0d4e887eb436f27bb1f4d5c212fdadc0c70c4c8dd29cdba027a62e7",
+      "source_path": "data/derived/weather-training-20260916/weather_features.csv.gz",
+      "source_sha256": "f0b943888cc975d2b883efebfdf57f8cfe4f1a98afc8bf7080901949ce189dec",
+      "source_manifest": "metadata/weather_features_source_manifest.json",
+      "source_manifest_sha256": "c7efe905662a159512d16ff6b522076d0a053994a0d4367dfcacb2b0627fe3a2",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {
+        "source_snapshot_time": [
+          "2026-05-11T12:00:00Z",
+          "2026-08-22T12:00:00Z"
+        ],
+        "anchor_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "feature_cutoff_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "target_end_at": [
+          "2026-05-12T06:19:27.787647Z",
+          "2026-08-23T12:26:20.218755Z"
+        ]
+      },
+      "split_counts": {
+        "not_stored": 500364
+      },
+      "target_counts": {
+        "0": 408000,
+        "1": 92364
+      },
+      "missing_flag_counts": {},
+      "original_source_manifest_sha256": "55e9375a5d1549f7394e0a2aedb32fe5b6b43ca9574d16d34f625059e30681d0"
+    },
+    {
+      "path": "weather_history.csv",
+      "row_count": 500364,
+      "columns": [
+        "example_id",
+        "weather_rain_6h_mm",
+        "weather_rain_24h_mm",
+        "weather_rh_min_24h",
+        "weather_vpd_mean_24h",
+        "weather_wind_u_mean_6h",
+        "weather_wind_v_mean_6h",
+        "weather_wind_speed_mean_6h",
+        "weather_wind_speed_max_6h",
+        "weather_wind_steadiness_6h"
+      ],
+      "bytes": 83124239,
+      "sha256": "282b786066bab2bf7844f3b8bed2bac3c2cc8c857bba3612e6560f1c7dafc566",
+      "source_path": "data/derived/weather-history-20260916/history.csv.gz",
+      "source_sha256": "460af503486463774a2f72b759cef8571ff485c36dbf8968d1c155300fb3487d",
+      "source_manifest": "metadata/weather_history_source_manifest.json",
+      "source_manifest_sha256": "8cae942bb962918dd467760418df281df14b63fa5c6dc5137870d8ab60a1ddaa",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {},
+      "split_counts": {
+        "not_stored": 500364
+      },
+      "target_counts": {},
+      "missing_flag_counts": {},
+      "original_source_manifest_sha256": "4b615ec403ba665d9882494d60da300a41b4fe53718439654872e2f2e4f1f970"
+    },
+    {
+      "path": "directional_features.csv",
+      "row_count": 500364,
+      "columns": [
+        "example_id",
+        "cell_id",
+        "source_snapshot_time",
+        "anchor_at",
+        "feature_cutoff_at",
+        "target_end_at",
+        "target_newly_burned_12h",
+        "fire_5x5_detection_count",
+        "fire_5x5_active_cell_count",
+        "fire_5x5_recent_12h_count",
+        "fire_nearest_detection_km",
+        "fire_nearest_cell_km",
+        "fire_nearest_detection_age_hours",
+        "fire_distance_weighted_detection_count",
+        "fire_recent_fraction",
+        "wind_from_nearest_fire_m_s",
+        "wind_from_fire_weighted_m_s",
+        "wind_nearest_alignment"
+      ],
+      "bytes": 167448996,
+      "sha256": "73596d56dcc0a41baddc511e58adb9f82449d1bb9b379f6b600f915dff5da67f",
+      "source_path": "data/derived/directional-weather-20260916/directional_features.csv.gz",
+      "source_sha256": "da93bf05cb23dc3690a816a6ce393c01ff6f1526e0f2b6db900ae2182bfc0460",
+      "source_manifest": "metadata/directional_features_source_manifest.json",
+      "source_manifest_sha256": "7bcfa476fda3075e620a6b836a3d6a94efe0c57b873e8536156f9f3529b4b62d",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {
+        "source_snapshot_time": [
+          "2026-05-11T12:00:00Z",
+          "2026-08-22T12:00:00Z"
+        ],
+        "anchor_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "feature_cutoff_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "target_end_at": [
+          "2026-05-12T06:19:27.787647Z",
+          "2026-08-23T12:26:20.218755Z"
+        ]
+      },
+      "split_counts": {
+        "not_stored": 500364
+      },
+      "target_counts": {
+        "0": 408000,
+        "1": 92364
+      },
+      "missing_flag_counts": {},
+      "original_source_manifest_sha256": "8e5cf65eab33ffddab68dd857ca4cf27f8f6786fa29a62562e81db23a32ac3fe"
+    },
+    {
+      "path": "vegetation_features.csv",
+      "row_count": 500364,
+      "columns": [
+        "example_id",
+        "cell_id",
+        "source_snapshot_time",
+        "anchor_at",
+        "feature_cutoff_at",
+        "target_end_at",
+        "target_newly_burned_12h",
+        "dataset_split",
+        "vegetation_land_cover_needleleaf",
+        "vegetation_land_cover_broadleaf",
+        "vegetation_land_cover_mixed_forest",
+        "vegetation_land_cover_shrubland",
+        "vegetation_land_cover_grassland",
+        "vegetation_land_cover_wetland",
+        "vegetation_land_cover_cropland",
+        "vegetation_land_cover_other_vegetation",
+        "vegetation_land_cover_barren",
+        "vegetation_land_cover_urban",
+        "vegetation_land_cover_water",
+        "vegetation_land_cover_snow_ice",
+        "vegetation_land_cover_valid_fraction",
+        "vegetation_land_cover_missing",
+        "vegetation_land_cover_age_days",
+        "vegetation_tree_cover",
+        "vegetation_non_tree_cover",
+        "vegetation_nonvegetated_cover",
+        "vegetation_cover_valid_fraction",
+        "vegetation_cover_missing",
+        "vegetation_cover_age_days",
+        "vegetation_cover_caution_fraction",
+        "vegetation_lineage",
+        "vegetation_information_cutoff_at",
+        "vegetation_simulation_at"
+      ],
+      "bytes": 367112467,
+      "sha256": "0981b243ceb95f904700d79f5b59f70e05f268b339f41b361d1260d830b0f34a",
+      "source_path": "data/derived/vegetation-expanded-static-release/candidate_examples.csv.gz",
+      "source_sha256": "85ce996d55a52bfc198903402542ff61bb943f1d81350dd7f4ac52ccd5c056f7",
+      "source_manifest": "metadata/vegetation_features_source_manifest.json",
+      "source_manifest_sha256": "65d0457db8156e0440a7288a52ad7010c58e61e1117c4150f6377dbcfbe14a32",
+      "transformation": "identity and vegetation column projection",
+      "time_ranges": {
+        "source_snapshot_time": [
+          "2026-05-11T12:00:00Z",
+          "2026-08-22T12:00:00Z"
+        ],
+        "anchor_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "feature_cutoff_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ],
+        "target_end_at": [
+          "2026-05-12T06:19:27.787647Z",
+          "2026-08-23T12:26:20.218755Z"
+        ]
+      },
+      "split_counts": {
+        "train": 402671,
+        "validation": 97693
+      },
+      "target_counts": {
+        "0": 408000,
+        "1": 92364
+      },
+      "missing_flag_counts": {
+        "vegetation_land_cover_missing=0.0": 466215,
+        "vegetation_cover_missing=0.0": 354745,
+        "vegetation_land_cover_missing=1.0": 34149,
+        "vegetation_cover_missing=1.0": 145619
+      },
+      "original_source_manifest_sha256": "22f01c82839fc02c155a98e743a6fa8b3ea5e52f135fef0b7af3b09997094744"
+    },
+    {
+      "path": "landscape_features.csv",
+      "row_count": 500364,
+      "columns": [
+        "example_id",
+        "cell_id",
+        "feature_cutoff_at",
+        "landscape_sha256",
+        "landscape_fraction_needleleaf",
+        "landscape_fraction_broadleaf",
+        "landscape_fraction_mixed_forest",
+        "landscape_fraction_shrubland",
+        "landscape_fraction_grassland",
+        "landscape_fraction_other_vegetation",
+        "landscape_fraction_wetland",
+        "landscape_fraction_cropland",
+        "landscape_fraction_barren",
+        "landscape_fraction_urban",
+        "landscape_fraction_water",
+        "landscape_fraction_snow_ice",
+        "landscape_valid_fraction",
+        "landscape_road_length_m",
+        "landscape_road_known_width_fraction",
+        "landscape_known_road_surface_fraction",
+        "landscape_road_distance_m",
+        "landscape_road_distance_censored",
+        "landscape_urban_distance_m",
+        "landscape_urban_distance_censored",
+        "landscape_missing",
+        "landscape_road_missing"
+      ],
+      "bytes": 73141107,
+      "sha256": "a64f947640ef7efc3e707d342caafaf15e09860ee94a930ec7fd471cd1283480",
+      "source_path": "data/derived/landscape-incident-pilot-20260916/landscape_features.csv.gz",
+      "source_sha256": "698e441eb0ea64071c1c93ac2b797e07374c9d3b06f48fdd1f44df8c925a3666",
+      "source_manifest": "metadata/landscape_features_source_manifest.json",
+      "source_manifest_sha256": "f433db8a95eb258d7fcac76c1316013c22d10155ae08715bafe24ef26e915e5d",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {
+        "feature_cutoff_at": [
+          "2026-05-11T18:19:27.787647Z",
+          "2026-08-23T00:26:20.218755Z"
+        ]
+      },
+      "split_counts": {
+        "not_stored": 500364
+      },
+      "target_counts": {},
+      "missing_flag_counts": {
+        "landscape_missing=1.0": 499880,
+        "landscape_road_missing=1.0": 500364,
+        "landscape_missing=0.0": 484
+      },
+      "original_source_manifest_sha256": "5d5ecebb8adff30c3f0fac470d8ddfc72a6024eb3402d9318ba1d2a7f8711055"
+    },
+    {
+      "path": "incident_assignments.csv",
+      "row_count": 500364,
+      "columns": [
+        "example_id",
+        "incident_group_id",
+        "incident_member_keys",
+        "incident_source_record_ids",
+        "incident_assignment_reason",
+        "region_key",
+        "incident_split"
+      ],
+      "bytes": 100579182,
+      "sha256": "8f422945512fbbb03161af80f10f8fb2da0b20d8ba61e71783d7d26d7479ecc7",
+      "source_path": "artifacts/incident-sequences-recovered-20260907-boreal/incident_assignments.csv.gz",
+      "source_sha256": "8c9ec3fcd649cb00f451b1a590c0c4ec32d3eb41d960e2ca3e8bbbffdad1399b",
+      "source_manifest": "metadata/incident_assignments_source_manifest.json",
+      "source_manifest_sha256": "6ec17f1374d08f935f66ba0226a6a8f5e7b5b2e78cba0a2852d0f88c92f7e3c0",
+      "transformation": "lossless gzip decompression",
+      "time_ranges": {},
+      "split_counts": {
+        "unassigned": 279134,
+        "train": 27792,
+        "later_time": 159813,
+        "held_region": 17040,
+        "held_incident": 12064,
+        "calibration": 4521
+      },
+      "target_counts": {},
+      "missing_flag_counts": {},
+      "original_source_manifest_sha256": "6ec17f1374d08f935f66ba0226a6a8f5e7b5b2e78cba0a2852d0f88c92f7e3c0"
+    }
+  ],
+  "validation": "Source checksums, row counts, unique IDs, exact candidate ID sets, shared identity fields, date bounds, and disjoint unscored positives verified.",
+  "public_metadata_policy": "Repository-relative provenance paths; original source hashes retained separately from packaged manifest hashes."
+}

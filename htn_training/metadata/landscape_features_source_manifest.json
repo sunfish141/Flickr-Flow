@@ -1,0 +1,97 @@
+{
+  "base_candidates_sha256": "cabc71a9c1b0356b5eef3bd8e32843f7bf92c1301ab8724d6d94931385723c7a",
+  "base_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26",
+  "base_release": "releases/wildfire-spread-firms-feds-boreal-no-weather-2026-05-11_to_2026-08-22",
+  "feature_columns": [
+    "landscape_fraction_needleleaf",
+    "landscape_fraction_broadleaf",
+    "landscape_fraction_mixed_forest",
+    "landscape_fraction_shrubland",
+    "landscape_fraction_grassland",
+    "landscape_fraction_other_vegetation",
+    "landscape_fraction_wetland",
+    "landscape_fraction_cropland",
+    "landscape_fraction_barren",
+    "landscape_fraction_urban",
+    "landscape_fraction_water",
+    "landscape_fraction_snow_ice",
+    "landscape_valid_fraction",
+    "landscape_road_length_m",
+    "landscape_road_known_width_fraction",
+    "landscape_known_road_surface_fraction",
+    "landscape_road_distance_m",
+    "landscape_road_distance_censored",
+    "landscape_urban_distance_m",
+    "landscape_urban_distance_censored",
+    "landscape_missing",
+    "landscape_road_missing"
+  ],
+  "files": {
+    "landscape_features.csv.gz": "698e441eb0ea64071c1c93ac2b797e07374c9d3b06f48fdd1f44df8c925a3666"
+  },
+  "kind": "landscape-candidate-sidecar/v1",
+  "land_cover_rows": 484,
+  "landscapes": [
+    {
+      "path": "data/landscape/candidate-pilot-10/v2/manifest.json",
+      "sha256": "04f681e672818a05b494fbf795c64a6f88a322beb3dd921ceb48903cdbb7a931"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-08/v2/manifest.json",
+      "sha256": "07b8ca77726f3163fb7184839d5da837b84f4317d7eee2971c9f6899a3f787ba"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-03/v2/manifest.json",
+      "sha256": "08be28af5a38b539716d41c13cf15015cd0da80feea576c5988b96545d84576e"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-06/v2/manifest.json",
+      "sha256": "182cda7b03d0a2336ba312f2fd48c0cc2251d6c04dcd8e1f992c92c921a77d6e"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-05/v2/manifest.json",
+      "sha256": "44befb34dce615f04eb47d0bc577ea53da8ec126063a47253cfd4944539d22a8"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-11/v2/manifest.json",
+      "sha256": "45d9db7c00dcfbd6d6a9bd06cd31b734ec68ad4fa5b872d80d1c48440a73e105"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-04/v2/manifest.json",
+      "sha256": "519f34fe79425d6ddff027d21b8a7cee1e4045c3bbb44c90d226c7c9d0ec29e1"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-12/v2/manifest.json",
+      "sha256": "523cdb1ff6b7613feb7bb97b9628e40320896dd667737ad63e6f5660aadb49f9"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-02/v2/manifest.json",
+      "sha256": "6918866c5726c76712120b8becca8190c7b1e1adf3366d2b9d6ae0d47aa07700"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-09/v2/manifest.json",
+      "sha256": "73301e0da82cc78f5967af1f81ca86602ac57ae2ca75d823cf3ad474747e7921"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-01/v2/manifest.json",
+      "sha256": "74da9e43a04f4a2de0d22cd1cf4fe8c51ccc65c3352fbe9cb9f7d40ae5d4f11e"
+    },
+    {
+      "path": "data/landscape/boulder-pilot-20260916/v2/manifest.json",
+      "sha256": "869fe931f32d356e663c5d656b1d6520a35b03e2e0cc4221737f45e521fc6735"
+    },
+    {
+      "path": "data/landscape/candidate-pilot-07/v2/manifest.json",
+      "sha256": "98e5e6e7b84592ed853b1ea8b54e885bb39a14391bdb09c374f50a2cda1bc1a5"
+    },
+    {
+      "path": "data/landscape/edson-pilot-20260916/v2/manifest.json",
+      "sha256": "f8f9f5a971e4a62bb8a9f2ee908194d763d987ae43922eae7fa4373b9aca5d2c"
+    }
+  ],
+  "mode": "retrospective",
+  "overlap_policy": "first spatially complete bundle in checksum order; no mosaicked observations",
+  "road_rows": 0,
+  "row_count": 500364,
+  "status": "complete"
+}

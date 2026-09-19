@@ -1,0 +1,32 @@
+{
+  "availability_lag_hours": 3,
+  "base_release_manifest_sha256": "fd18eee91abe3a390969379ff9951a17e47302c7d447ff4160c40a2894502e26",
+  "context_radius_cells": 2,
+  "feature_columns": [
+    "fire_5x5_detection_count",
+    "fire_5x5_active_cell_count",
+    "fire_5x5_recent_12h_count",
+    "fire_nearest_detection_km",
+    "fire_nearest_cell_km",
+    "fire_nearest_detection_age_hours",
+    "fire_distance_weighted_detection_count",
+    "fire_recent_fraction",
+    "wind_from_nearest_fire_m_s",
+    "wind_from_fire_weighted_m_s",
+    "wind_nearest_alignment"
+  ],
+  "files": {
+    "audit.json": "08ebfb9c80a3eac0d11d2617f37dcfe5c0f9d94bd9389d640612f46614f3a77a",
+    "directional_features.csv.gz": "da93bf05cb23dc3690a816a6ce393c01ff6f1526e0f2b6db900ae2182bfc0460",
+    "source_inventory.json": "c3dbcaf2d23c340c5c509bce6baa305c62d60ca766169383ee751a163e5376ef"
+  },
+  "firms_lookback_hours": 24,
+  "kind": "directional-weather-observed-features/v1",
+  "missing_policy": "zero evidence counts and NaN unsupported geometry; calm alignment zero",
+  "row_count": 500364,
+  "scope": "observed rows only; do not attach actual fire geometry to synthetic fire states",
+  "status": "complete",
+  "weather_manifest": "data/derived/weather-training-20260916/dataset_manifest.json",
+  "weather_manifest_sha256": "55e9375a5d1549f7394e0a2aedb32fe5b6b43ca9574d16d34f625059e30681d0",
+  "wind_convention": "earth east/north components projected from detection toward candidate"
+}
