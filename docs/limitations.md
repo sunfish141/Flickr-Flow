@@ -14,8 +14,13 @@ scores and protocol in [model results](model-results.md).
 
 The coarse map model advances in 12-hour steps with finite fuel, deterministic
 draws and burned-cell masks. It uses no weather inputs. The separately fitted
-offline weather blend predicts over observed dataset rows; it does not provide
-weather forecasts for arbitrary map cells or future simulation steps.
+weather blend is also available in an optional polygon hybrid. Open-Meteo
+supplies captured weather; the ML model estimates cell admission, not weather.
+One representative weather location applies to the entire scenario. Synthetic
+fire features and the coupling to native travel introduce distribution shifts;
+the original observed-row scores do not validate the hybrid's perimeter accuracy.
+Beyond the forecast, the last conditions are explicitly held constant. Historical
+analysis is retrospective. See [weather polygon limitations](weather-polygon.md).
 
 The terrain lookup covers 250,215 retained candidate cells. Outside that lookup,
 terrain stays explicitly missing. The model can process missing features; a
@@ -62,14 +67,15 @@ ending at the August 22 boundary in the release name. They compare observations
 with a continuing simulation; later observations do not reseed each step.
 
 Fine fuel/road playback is an uncalibrated scenario using explicit travel rates
-and constant wind. Unknown road widths use a documented assumption where
+and constant wind in standard mode, or captured weather wind in the hybrid.
+Unknown road widths use a documented assumption where
 applicable; unsupported urban mixtures and structures are not modeled. A current
 retained landscape can support a labeled retrospective historical scenario,
 but does not establish that its inputs were available during May–August.
 
 ## Verification and operation boundaries
 
-The checkpoint passed 157 Python tests, 14 frontend tests and production-browser
+The checkpoint passed 181 Python tests, 14 frontend tests and production-browser
 checks. Real API/browser checks used the trained coarse model and restored
 vegetation/road sources, including polygon expansion and replay. Large-display
 and historical browser cases used explicit fixtures; engine edge cases also
@@ -88,5 +94,7 @@ checks are not authentication. No public deployment was performed.
 Coordinates and state go to the app server. The optional basemap, enabled by
 default, sends tile requests to OpenStreetMap; live FIRMS sends the selected
 bounds through the server to NASA. The app adds no analytics or browser storage.
+Weather ML sends a representative ignition location and dates to Open-Meteo;
+the captured weather persists on the server for reproducible replay.
 Code licensing does not independently establish redistribution rights for each
 external source dataset.

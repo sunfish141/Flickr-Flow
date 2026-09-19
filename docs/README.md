@@ -4,6 +4,8 @@ The application is being rebuilt incrementally from `recreate-project-prompt.md`
 
 For a concise overview of the data sources, learned-model architecture and
 polygon algorithm, see the [hackathon project summary](hackathon-summary.md).
+The [weather ML polygon integration](weather-polygon.md) explains the optional
+hybrid mode, historical/live weather sources and its experimental assumptions.
 
 1. Standalone runtime: retain the tested spatial/prediction algorithms and
    React views, separate FastAPI settings/resources/routes, relocate local
@@ -15,7 +17,7 @@ polygon algorithm, see the [hackathon project summary](hackathon-summary.md).
    all map and source controls, and verify interactions with browser tests.
 
 All three implementation milestones are complete. The model run uses the
-real public release; **157 Python tests and 14 frontend tests pass**, saved-model
+real public release; **181 Python tests and 14 frontend tests pass**, saved-model
 evaluation reproduces all recorded scores, and real-model API replay is
 deterministic. Production-browser checks cover request cancellation, historical
 replay, keyboard controls, mobile layout and automated accessibility. See

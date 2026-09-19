@@ -153,9 +153,11 @@ class LocalSpreadModel:
         lon, lat = sampler.to_geo.transform(*sampler.bounds.centroid.coords[0])
         self.wind = projected_wind(sampler.to_grid, (lat, lon), policy.wind_east_m_s, policy.wind_north_m_s)
         self.arrival_searches = OrderedDict()
+        self.hybrid_searches = OrderedDict()
 
     def clear_arrivals(self):
         self.arrival_searches.clear()
+        self.hybrid_searches.clear()
 
     def _connect(self, pairs):
         """Vectorized shared gates; identical road/hole/corner rules to scalar construction."""
@@ -326,6 +328,10 @@ class LocalSpreadModel:
         if not math.isfinite(elapsed_minutes) or elapsed_minutes < 0:
             raise ValueError('Local playback time must be finite and nonnegative')
         times = self.arrivals(tuple(sorted(set(seeds))), until=elapsed_minutes)
+        return self.frame_from_arrivals(times, elapsed_minutes)
+
+    def frame_from_arrivals(self, times, elapsed_minutes):
+        """Render supplied arrival times using the same geometry/fuel contract."""
         active, burned, cells = [], [], {}
         boundary_reached = False
         for i, arrival in times.items():

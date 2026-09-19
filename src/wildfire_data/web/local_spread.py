@@ -82,6 +82,7 @@ class LocalScenarios:
     def configuration(self):
         return {'available': bool(self.regions) or bool(self.expanding), 'expanding': bool(self.expanding), 'kind': 'uncalibrated landscape scenario',
             'max_steps': None,
+            'weather_ml': self.expanding.hybrid.configuration() if self.expanding and self.expanding.hybrid else {'available': False},
             'expanding_error': self.expanding_error,
             'limits': self.expanding.configuration() if self.expanding else None,
             'presets': self.presets,
@@ -91,10 +92,11 @@ class LocalScenarios:
             'mesh_m': self.mesh_m if self.regions or self.expanding else None,
             'policy': __import__('dataclasses').asdict(self.policy) if self.regions or self.expanding else None}
 
-    def response(self, region, model, seeds, step, origin):
+    def response(self, region, model, seeds, step, origin, *, frame=None):
         origin = StepInput.aware(origin)
         valid_at = simulation_time(origin, step)
-        frame = model.frame(seeds, step*720)
+        if frame is None:
+            frame = model.frame(seeds, step*720)
         incident = hashlib.sha256(f'{model.identity}:{tuple(seeds)}:{origin.isoformat()}'.encode()).hexdigest()
         points = []
         for cell_id, areas in sorted(frame['cells'].items()):

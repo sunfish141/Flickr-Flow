@@ -54,6 +54,12 @@ Subsequent starts use this repository's own files. See [startup data preparation
 for storage, controls and measured checks. Choose **Polygon spread · roads & fuel**
 in the app to use the restored expanding engine.
 
+Enable **Weather ML + polygon (experimental)** to combine trained 1 km cell
+admission probabilities with native polygon travel and captured weather wind.
+Placement uses live forecasts by default; an optional date selects historical
+weather without a satellite archive. Weather is pinned for replay. See
+[weather sources, model coupling and limitations](docs/weather-polygon.md).
+
 The public training data is in `htn_training/`. For geospatial playback, set
 `WILDFIRE_ASSET_ROOT` to an existing directory containing retained `data/` and
 `artifacts/` resources, or restore them in this repository. The default
@@ -134,7 +140,7 @@ node --test frontend/tests/*.test.js
 Tests include the reference behavior contracts for grid identity, finite-fuel
 spread, local road barriers, HTTP validation, live observations, and historical
 comparison. Runtime preparation uses a single worker and bounded shared caches.
-The verified checkpoint passes 157 Python tests, 14 frontend tests, and production
+The verified checkpoint passes 181 Python tests, 14 frontend tests, and production
 Chromium checks for playback races, historical replay, 128-frame history,
 2,000-cell displays, keyboard focus and mobile layout. See
 [verification instructions and fixture boundaries](docs/verification.md) to

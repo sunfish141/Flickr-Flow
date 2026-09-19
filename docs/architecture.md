@@ -67,6 +67,14 @@ vegetation, historical observations and fine road geometry.
 Training uses exact example-ID joins and source-manifest incident assignments,
 separate training/calibration incidents and the original later-time boundary.
 The offline weather blend and coarse recursive map model are separate artifacts.
+An optional `WeatherLandscapes` resource loads the verified weather artifact for
+expanding polygon playback. `HybridSearch` freezes fire proxies and ML admission
+decisions per 12-hour window, then advances the native graph with weather wind.
+Each model caches at most two such searches. Pinned weather snapshots persist
+under the runtime data root, with 32 in memory and a 256 MB disk cap. Their
+digests, model identity and origin bind replay; graph expansion recomputes from
+the same initial ignitions. The standard engine retains its existing behavior.
+See [weather coupling and source contracts](weather-polygon.md).
 The runtime defaults to a completed local public-CSV run when present. Legacy
 run manifests remain supported through explicit settings.
 

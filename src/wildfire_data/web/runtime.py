@@ -110,6 +110,14 @@ class Runtime:
                             self.model.landscape.allows_cell(cell.cell_id)
                             self.model.fuel_estimate(cell.cell_id, origin)
 
+        if self.local_scenarios.expanding and self.model_error is None and self.public_model:
+            try:
+                from wildfire_data.web.weather_landscape import WeatherLandscapes
+                self.local_scenarios.expanding.hybrid = WeatherLandscapes(self.settings.run_manifest,
+                    self.settings.data_root, self.terrain, self.model.observation_calibration, self.locks['inference'])
+            except Exception:
+                logger.exception('Optional weather ML polygon model could not be initialized')
+
     def close(self):
         self.local_scenarios.close()
         if self.owns_vegetation and hasattr(self.vegetation, 'close'):

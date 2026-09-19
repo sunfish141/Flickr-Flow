@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 157 tests passed |
+| Python behavior/regression suite | 181 tests passed |
 | Frontend API, timeline and cancellation unit tests | 14 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -197,6 +197,41 @@ Reports, the final frame and a screenshot are saved locally under
 not long-horizon forecast accuracy. Tile/patch budgets, fixed evidence boundaries
 and historical date availability still apply.
 
+### Weather ML polygon integration
+
+The weather integration passed 181 Python and 14 frontend tests. The shared
+production-browser regression also passed playback/cancellation, historical
+fixtures, mobile layout and automated accessibility checks.
+
+The hybrid regression checks cover pinned weather and units, causal six-hour
+features, explicit missing terrain, probability-based cell admission, native
+road/water barriers, separate fuel clocks, identity and cache eviction. Manual
+historical placement works without an archived FIRMS store and stops at weather
+coverage; satellite routes also select the correct weather source. The existing
+classifier was reused without retraining or changing its published scores.
+
+The real-data Chromium run `tests/web/browser_weather_polygon.py` passed all four
+combinations below using native landscapes, the trained weather artifact and
+actual Open-Meteo responses. Only basemap images were stubbed. Saved-frame
+playback issued no new inference requests, repeated API steps matched exactly,
+and no JavaScript errors occurred.
+
+| Region | Weather source | Simulated time | Tiles | Active patches | Burned area |
+| --- | --- | --- | --- | --- | --- |
+| Colorado | Captured forecast | 36 h | 3 | 180 | 116.62 ha |
+| Colorado | Historical analysis, starting August 20 | 60 h | 4 | 809 | 480.30 ha |
+| Alberta | Captured forecast | 36 h | 3 | 215 | 84.45 ha |
+| Alberta | Historical analysis, starting August 20 | 60 h | 4 | 325 | 217.88 ha |
+
+These are execution checks, not observed-perimeter accuracy measurements. The
+historical cases use placed ignitions and real historical weather; this server
+does not currently retain the historical FIRMS archive. Weather-model transfer
+to synthetic fire features remains experimental. The CSV terrain provider can
+return missing terrain outside its retained cells. Reports, frames and
+screenshots are under `artifacts/weather-polygon/browser/`.
+After restarting the main server, the saved 36-hour Colorado forecast scenario
+also reproduced its complete frame exactly from the persisted weather snapshot.
+
 ### Commands
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in
@@ -225,6 +260,7 @@ python tests/web/browser_app.py http://127.0.0.1:8001
 python tests/web/browser_restored_landscape.py http://127.0.0.1:8001
 python tests/web/browser_regional_landscape.py http://127.0.0.1:8001
 python tests/web/browser_unlimited_landscape.py http://127.0.0.1:8001
+python tests/web/browser_weather_polygon.py http://127.0.0.1:8001
 ```
 
 The browser suite requires a ready model. Train the public-CSV model first using

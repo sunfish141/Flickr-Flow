@@ -9,6 +9,7 @@
 | Historical daily comparisons | Retained complete FIRMS source archive |
 | Vegetation inspector | Verified local vegetation stores/rasters |
 | Fine fuel/road simulation | Native fuel bundles or NALCMS plus offline indexed roads |
+| Weather ML polygon simulation | Verified public weather model, terrain provider and captured Open-Meteo weather |
 
 Live FIRMS automatically reads the server credential from this repository's
 ignored `config/.env`, with process environment variables taking precedence.
@@ -18,7 +19,7 @@ by `/api/config`. See [credential configuration](providers.md#configuration-sele
 
 After public-CSV training, coarse placement works without another repository's
 source code or raw archive. Weather inference is available as a batch command
-over observed examples, not as map forecast weather. Historical/vegetation/fine
+and in the optional experimental polygon hybrid. Historical/vegetation/fine
 capabilities report absent sources rather than synthesizing them from labels.
 
 Vegetation and polygon sources now prepare at startup, and their real archives
@@ -41,6 +42,15 @@ retained when switching to FIRMS, which uses only the visible map area in detail
 mode. Zoom in before loading satellite detections. Fixed pilot APIs remain
 available, with pilot choices shown as a fallback if the expanding archive is
 unavailable.
+
+**Weather ML + polygon** uses the trained weather policy to admit new 1 km cells
+while native roads, water and fuel constrain their detailed spread. New fires
+use a captured forecast; a historical placement date selects analysis without
+requiring a satellite archive. Historical FIRMS also selects analysis. One
+representative weather location applies to the scenario. Weather and model
+identity are pinned for replay. Beyond a live forecast, the last conditions are
+held constant with an explicit label; historical weather stops at its coverage
+boundary. This coupling is experimental. See [weather polygon](weather-polygon.md).
 
 Playback stores the most recent 128 complete frames. Scrubbing pauses requests;
 resuming traverses saved frames before extending the simulation. Pause, reset,

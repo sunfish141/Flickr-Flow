@@ -1,5 +1,5 @@
 """Expanding landscape playback for placed and satellite-seeded scenarios."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from collections import OrderedDict
 import hashlib
 import json
@@ -45,6 +45,26 @@ class ExpandingState(Input):
     ignitions: list[GeographicSeed] = Field(min_length=1, max_length=500)
     tiles: list[TileInput] = Field(min_length=1, max_length=MAX_REQUEST_TILES)
     step_index: int = Field(ge=0, strict=True)
+    weather_snapshot: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
+
+
+class LandscapeSeed(SeedInput):
+    weather_ml: bool = False
+    weather_date: date | None = Field(default=None, ge=date(2026,5,11), le=date(2026,8,21))
+
+    @model_validator(mode='after')
+    def weather_date_requires_model(self):
+        if self.weather_date and not self.weather_ml:
+            raise ValueError('A historical weather date requires weather ML polygon mode')
+        return self
+
+
+class LandscapeBounds(BoundsInput):
+    weather_ml: bool = False
+
+
+class LandscapeHistorical(HistoricalFirmsInput):
+    weather_ml: bool = False
 
 
 class ExpandingStep(Input):
@@ -75,6 +95,7 @@ class ExpandingScenarios:
         self.to_grid = Transformer.from_crs('EPSG:4326', TRAINING_GRID_CRS, always_xy=True)
         self.tile_models, self.models = OrderedDict(), OrderedDict()
         self.prewarm_tiles = min(24, max(0, int(config.get('prewarm_tiles', 0))))
+        self.hybrid = None
 
     def configuration(self):
         return {**self.limits.model_dump(), 'max_area_km2': self.limits.max_tiles * (TILE_METRES / 1000)**2}
@@ -147,6 +168,8 @@ class ExpandingScenarios:
         self.models.clear()
         self.tile_models.clear()
         self.store.close()
+        if self.hybrid:
+            self.hybrid.weather.cache.clear()
 
     def check_tile_budget(self, count):
         if count > self.limits.max_tiles:
@@ -160,11 +183,13 @@ class ExpandingScenarios:
         for key in sorted(keys):
             samplers[key] = self.store.load(key)
 
-    def initialize(self, coordinates, origin, *, satellite=False):
+    def initialize(self, coordinates, origin, *, satellite=False, weather_ml=False, historical=False):
         if satellite and not coordinates:
             raise ValueError('No eligible FIRMS fire cells were found in this area. Try another map area or date; starting observations must be 3–24 hours old.')
         if not 1 <= len(coordinates) <= 500:
             raise ValueError(f'This request contains {len(coordinates)} starting fire cells; detailed landscapes support at most 500. Zoom in and load a smaller visible map area, or use the Existing 1 km model for broad FIRMS coverage.')
+        if weather_ml and self.hybrid is None:
+            raise ValueError('Weather ML polygon mode is unavailable; verify the trained weather model on the server')
         samplers = {}
         self.load([tile_key(*self.to_grid.transform(*point)) for point in coordinates], samplers)
         model = self.model(samplers)
@@ -186,13 +211,14 @@ class ExpandingScenarios:
             coordinates = mapped
             if not coordinates:
                 raise ValueError('No observed cells contain supported vegetation; satellite observations cannot seed this landscape model')
-        result = self.frame(coordinates, samplers, 0, origin)
+        snapshot = self.hybrid.weather.capture(*sorted(coordinates)[0], origin, historical=historical) if weather_ml else None
+        result = self.frame(coordinates, samplers, 0, origin, snapshot=snapshot)
         if satellite:
             result['metadata'].update(satellite_seed_policy='one nearest-center supported vegetation patch per observed 1 km cell; location within the cell is a scenario assumption',
                                       unsupported_observed_cells=unmatched, mapped_starting_cells=len(coordinates))
         return result
 
-    def frame(self, coordinates, samplers, step, origin):
+    def frame(self, coordinates, samplers, step, origin, *, snapshot=None):
         simulation_time(origin, step)
         # Recompute from the same geographic ignitions when evidence grows.
         # Aligned tiles preserve existing fuel geometry, arrival paths and burns.
@@ -204,11 +230,13 @@ class ExpandingScenarios:
                 model.wind = wind
                 model.clear_arrivals()
             seeds = model.seed_ids(coordinates)
-            frame = model.frame(seeds, step*720)
+            search = self.hybrid.search(model, seeds, origin, snapshot) if snapshot else None
+            frame = search.frame(step*720) if search else model.frame(seeds, step*720)
             keys = set()
             reach = self.local.policy.max_spotting_distance_m if self.local.policy.spotting_distance_per_wind_m_s else 0
             if frame['boundary_reached'] or reach:
-                for i, arrival in model.arrivals(seeds, until=step*720).items():
+                arrivals = search.times if search else model.arrivals(seeds, until=step*720)
+                for i, arrival in arrivals.items():
                     if arrival > step*720:
                         continue
                     g = model.patches[i].geometry
@@ -222,32 +250,52 @@ class ExpandingScenarios:
             if not keys:
                 break
             self.load(keys, samplers)
-        result = self.local.response('auto', model, seeds, step, origin)
+        result = self.local.response('auto', model, seeds, step, origin, frame=frame)
         ignition_dicts = [{'longitude': lon, 'latitude': lat} for lon, lat in sorted(set(coordinates))]
-        incident = self.incident(ignition_dicts, origin)
-        result['state'] = {'profile': self.profile, 'incident_id': incident, 'ignitions': ignition_dicts,
+        profile = self.scenario_profile(snapshot)
+        incident = self.incident(ignition_dicts, origin, profile=profile)
+        result['state'] = {'profile': profile, 'incident_id': incident, 'ignitions': ignition_dicts,
             'tiles': [{'x': k[0], 'y': k[1], 'sha256': samplers[k].sha256} for k in sorted(samplers)], 'step_index': step}
+        if snapshot:
+            result['state']['weather_snapshot'] = snapshot.sha256
+            result['weather_ml'] = True
         result.update(expanding=True, finished=False, boundary_reached=False,
             coverage={'type': 'Feature', 'geometry': mapping(transform(model.sampler.to_geo.transform, model.sampler.bounds)),
                       'properties': {'tiles': len(samplers)}})
+        if snapshot and snapshot.document['mode'] == 'historical':
+            result['finished'] = simulation_time(origin, step+1) > snapshot.end
         result['metadata'].update(tile_count=len(samplers), limits=self.configuration(), coverage_mode='expands from offline road archive and retained NALCMS; no road network requests',
                                   landscape_time_basis='current retained landscape, including for historical satellite scenarios')
         return result
 
-    def incident(self, ignitions, origin):
-        return hashlib.sha256(json.dumps([self.profile, ignitions, origin.isoformat()], sort_keys=True).encode()).hexdigest()
+    def scenario_profile(self, snapshot=None):
+        return hashlib.sha256(f'{self.profile}:{self.hybrid.identity}:{snapshot.sha256}'.encode()).hexdigest() if snapshot else self.profile
+
+    def incident(self, ignitions, origin, *, profile=None):
+        return hashlib.sha256(json.dumps([profile or self.profile, ignitions, origin.isoformat()], sort_keys=True).encode()).hexdigest()
 
     def advance(self, body):
         state = body.state
         origin = StepInput.aware(body.origin_at)
-        if state.profile != self.profile or state.incident_id != self.incident([p.model_dump() for p in state.ignitions], origin):
+        snapshot = None
+        if state.weather_snapshot:
+            if not self.hybrid:
+                raise ValueError('Weather ML polygon mode is unavailable on this server')
+            snapshot = self.hybrid.weather.load(state.weather_snapshot)
+            if (snapshot.origin_hour != origin.replace(minute=0,second=0,microsecond=0)
+                    or (body.historical and snapshot.document['mode'] != 'historical')):
+                raise ValueError('Weather scenario origin or source mode changed')
+            if snapshot.document['mode'] == 'historical' and simulation_time(origin, state.step_index+(2 if body.historical else 1)) > snapshot.end:
+                raise ValueError('End of the captured historical weather date range')
+        profile = self.scenario_profile(snapshot)
+        if state.profile != profile or state.incident_id != self.incident([p.model_dump() for p in state.ignitions], origin, profile=profile):
             raise ValueError('Landscape scenario identity changed; start a new scenario')
         if len({(t.x,t.y) for t in state.tiles}) != len(state.tiles):
             raise ValueError('Duplicate landscape tile state')
         self.check_tile_budget(len(state.tiles))
         samplers = {(t.x,t.y): self.store.load((t.x,t.y), expected=t.sha256) for t in state.tiles}
         step = state.step_index + (2 if body.historical else 1)
-        return self.frame([(p.longitude,p.latitude) for p in state.ignitions], samplers, step, origin)
+        return self.frame([(p.longitude,p.latitude) for p in state.ignitions], samplers, step, origin, snapshot=snapshot)
 
 
 def register_expanding_routes(app, firms, historical_firms, historical_day):
@@ -274,8 +322,10 @@ def register_expanding_routes(app, firms, historical_firms, historical_day):
             local.lock.release()
 
     @app.post('/api/landscape/seed')
-    def seed(body: SeedInput):
-        return run(lambda s: s.initialize([(p.longitude,p.latitude) for p in body.ignitions], datetime.now(timezone.utc)))
+    def seed(body: LandscapeSeed):
+        origin = datetime.combine(body.weather_date, datetime.min.time(),tzinfo=timezone.utc) if body.weather_date else datetime.now(timezone.utc)
+        return run(lambda s: s.initialize([(p.longitude,p.latitude) for p in body.ignitions], origin,
+                                          weather_ml=body.weather_ml, historical=bool(body.weather_date)))
 
     @app.post('/api/landscape/step')
     def step(body: ExpandingStep):
@@ -294,10 +344,11 @@ def register_expanding_routes(app, firms, historical_firms, historical_day):
             return result
         return run(perform)
 
-    def convert(s, observed):
+    def convert(s, observed, weather_ml=False):
         points = [p for p in observed['points'] if p['status'] == 'active']
         result = s.initialize([(p['longitude'],p['latitude']) for p in points],
-                              datetime.fromisoformat(observed['origin_at']), satellite=True)
+                              datetime.fromisoformat(observed['origin_at']), satellite=True,
+                              weather_ml=weather_ml, historical=bool(observed.get('historical')))
         result['metadata']['satellite'] = observed['metadata']
         if observed.get('historical'):
             result['historical'] = observed['historical']
@@ -305,9 +356,9 @@ def register_expanding_routes(app, firms, historical_firms, historical_day):
         return result
 
     @app.post('/api/landscape/firms')
-    def live(body: BoundsInput):
-        return run(lambda s: convert(s, firms(body)))
+    def live(body: LandscapeBounds):
+        return run(lambda s: convert(s, firms(BoundsInput(**body.model_dump(exclude={'weather_ml'}))), body.weather_ml))
 
     @app.post('/api/landscape/firms/historical')
-    def historical(body: HistoricalFirmsInput):
-        return run(lambda s: convert(s, historical_firms(body)))
+    def historical(body: LandscapeHistorical):
+        return run(lambda s: convert(s, historical_firms(HistoricalFirmsInput(**body.model_dump(exclude={'weather_ml'}))), body.weather_ml))

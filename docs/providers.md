@@ -52,6 +52,14 @@ own provenance and compatible manifests.
 
 ## Injection contracts
 
+The optional expanding weather hybrid selects `weather.joblib` from the same
+verified public run as the coarse model and uses its training-only observation
+calibration. The normal startup exposes it through `/api/config` under
+`local_spread.weather_ml`. It does not fetch weather at startup: opting in at
+placement or FIRMS loading captures the relevant forecast/analysis once.
+Snapshots remain under `<data-root>/runtime/scenario-weather/` for replay.
+Missing weather fails explicitly. See [source, cache and time contracts](weather-polygon.md).
+
 | `create_app` argument | Contract |
 | --- | --- |
 | `model` | An `IncidentTransitionModel`, normally returned by `model.loading.load_pass_model`. Startup wraps it with `FireSpreadModel.from_incident_model`; ordered feature columns, calibration and transition behavior must match. |

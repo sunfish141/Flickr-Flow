@@ -6,6 +6,8 @@ import { RequestCoordinator } from './requestCoordinator';
 export function useScenario() {
   const [config, setConfig] = useState(null);
   const [localRegion, setLocalRegion] = useState('');
+  const [weatherML, setWeatherML] = useState(false);
+  const [weatherDate, setWeatherDate] = useState('');
   const expanding = localRegion === 'auto' || !!config?.local_spread?.presets?.some(region => region.id === localRegion);
   const [scenario, dispatch] = useReducer(scenarioReducer, undefined, emptyScenario);
   const [playing, setPlaying] = useState(false);
@@ -79,7 +81,7 @@ export function useScenario() {
       dispatch({ type: 'append', frame: result });
       if (result.finished) setPlaying(false);
       if (result.local) {
-        message(result.boundary_reached ? 'Fire reached the boundary of collected evidence. Start a new scenario to continue elsewhere.' : `Local scenario: ${(result.active_area_m2 / 10000).toFixed(1)} active hectares; ${(result.burned_area_m2 / 10000).toFixed(1)} burned hectares. ${result.finished ? 'End of the historical date range.' : result.extinct ? 'No active fire remains. Burned fuel stays exhausted as the clock continues.' : 'Rates and wind are scenario assumptions.'}${result.historical ? ' Historical observations use the current retained landscape.' : ''}`);
+        message(result.boundary_reached ? 'Fire reached the boundary of collected evidence. Start a new scenario to continue elsewhere.' : `Local scenario: ${(result.active_area_m2 / 10000).toFixed(1)} active hectares; ${(result.burned_area_m2 / 10000).toFixed(1)} burned hectares. ${result.finished ? 'End of the historical date range.' : result.extinct ? 'No active fire remains. Burned fuel stays exhausted as the clock continues.' : result.weather_ml ? 'Weather ML guides cell entry; fine travel rates remain assumptions.' : 'Rates and wind are scenario assumptions.'}${result.historical ? ' Historical observations use the current retained landscape.' : ''}`);
         return;
       }
       message(result.historical ? `Historical FIRMS: ${result.historical.date} (UTC), ${result.historical.detection_count} detections. ${result.finished ? 'End of the historical date range.' : 'Purple observations compared with the continuing simulation.'}` : result.extinct ? 'No active fire remains. Burned cells stay masked as the clock continues.' :
@@ -98,12 +100,12 @@ export function useScenario() {
     if (scenario.ignitions.length >= 500) { message('At most 500 starting points are supported.', true); return false; }
     const ignitions = [...scenario.ignitions, { latitude, longitude, intensity }];
     if (expanding) message('Preparing local fuel and road tiles around the fire. First use may take several minutes…');
-    return request(expanding ? 'landscape/seed' : localRegion ? 'local/seed' : 'seed', { ignitions, ...(localRegion && !expanding ? { region: localRegion } : {}) }, result => {
+    return request(expanding ? 'landscape/seed' : localRegion ? 'local/seed' : 'seed', { ignitions, ...(expanding && weatherML ? { weather_ml: true, ...(weatherDate ? {weather_date: weatherDate} : {}) } : {}), ...(localRegion && !expanding ? { region: localRegion } : {}) }, result => {
       dispatch({ type: 'replace', frame: result, ignitions, source: 'placed' });
-      message(result.local ? 'Starting fuel patch added. Playback uses experimental travel rates and constant scenario wind.' : 'Starting fire added. Add more cells, or press Play to predict spread.');
+      message(result.weather_ml ? 'Weather ML polygon scenario ready. Captured weather and cell admission probabilities guide spread; roads and fuel constrain its path.' : result.local ? 'Starting fuel patch added. Playback uses experimental travel rates and constant scenario wind.' : 'Starting fire added. Add more cells, or press Play to predict spread.');
     });
   };
-  const loadFirms = (bounds, date = null) => request((expanding ? 'landscape/' : '') + (date ? 'firms/historical' : 'firms'), date ? { date, bounds } : bounds, result => {
+  const loadFirms = (bounds, date = null) => request((expanding ? 'landscape/' : '') + (date ? 'firms/historical' : 'firms'), { ...(date ? { date, bounds } : bounds), ...(expanding && weatherML ? { weather_ml: true } : {}) }, result => {
     dispatch({ type: 'replace', frame: result, source: 'firms' });
     if (result.expanding) {
       message(`Loaded satellite-seeded landscape scenario: ${result.metadata.mapped_starting_cells} starting cells; ${result.metadata.unsupported_observed_cells} cells without supported vegetation. Fine ignition positions are assumptions within observed 1 km cells. ${result.historical ? 'Historical observations use the current retained landscape, not a historical reconstruction.' : 'Landscape coverage expands with the fire.'}`);
@@ -115,7 +117,9 @@ export function useScenario() {
   const reset = () => { pause(); dispatch({ type: 'reset' }); message('Scenario reset.'); };
   const seek = step => { pause(); dispatch({ type: 'seek', step }); message(''); };
   return { config, scenario, frame, playing, busy, busySeconds, firmsCooldown, speed, setSpeed, status, message,
-    localRegion, expanding, setLocalRegion: value => { reset(); setLocalRegion(value); },
+    localRegion, expanding, weatherML, setWeatherML: value => { reset(); setWeatherML(value); },
+    weatherDate, setWeatherDate: value => { reset(); setWeatherDate(value); },
+    setLocalRegion: value => { reset(); setLocalRegion(value); },
     pause, advance, addIgnition, loadFirms, reset, seek,
     play: () => { if (!frame || frame.finished) return; message(''); setPlaying(true); },
   };

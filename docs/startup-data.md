@@ -64,7 +64,9 @@ Roads and active/burned polygons appear on the map. Default limits are 128 tiles
 duration cap; historical comparisons still stop at the final available date.
 Known road surface classes with missing widths
 use the configured 6 m assumption; unknown surfaces remain unsupported. This is
-an uncalibrated scenario with constant wind.
+an uncalibrated scenario with constant wind in standard mode. Optional
+[weather ML coupling](weather-polygon.md) uses captured wind and learned cell
+admission probabilities; it does not change the native fuel geometry.
 
 Fuel-specific polygon burning durations and the shared native water mask are
 described in [fuel duration and water barriers](fuel-and-water.md). The coarse
@@ -87,7 +89,7 @@ Unavailable measurements remain distinct from zero vegetation.
 
 ## Verification
 
-The **157-test Python suite** covers integrity, atomic import, repeat startup,
+The **181-test Python suite** covers integrity, atomic import, repeat startup,
 download failure and capture times, portable canopy loading, road barriers,
 tile seams, polygon replay, vegetation quality and API behavior. Download
 transport used fixtures; the real restoration reused archives without downloads.
