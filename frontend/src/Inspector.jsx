@@ -58,11 +58,12 @@ export default function Inspector({ point, frame, onClose, headingRef }) {
     <h2 id="point-title" tabIndex={-1} ref={headingRef}>{point.status === 'active' ? point.new_ignition ? 'New ignition' : 'Active fire' : point.status === 'burned' ? 'Burned cell' : 'Spread candidate'}</h2>
     <p id="point-location" className="point-location">{point.latitude.toFixed(5)}°, {point.longitude.toFixed(5)}°</p>
     <Details rows={rows} id="point-details" />
+    {frame.local && <p className="hint">Areas describe fire within the highlighted 1 km square. The detailed perimeter shows which ground has burned; the whole square is not necessarily burned.</p>}
     <section className="vegetation-details" aria-labelledby="vegetation-title">
       <h3 id="vegetation-title">Vegetation</h3><p id="vegetation-status" role="status">{description}</p>
       {fraction != null && <meter id="vegetation-density" min="0" max="1" value={fraction} aria-label={data.density_fraction == null ? 'Mapped vegetated land fraction' : 'Vegetation cover fraction'} />}
       <Details rows={coverRows} id="vegetation-details" />
-      <p className="vegetation-note">Reference vegetation at scenario start. The 1 km model uses supported cover estimates to assign a fuel duration; the measurements below remain unchanged as simulated fuel is consumed. Fuel amount and burning time are scenario estimates, not measured fuel mass.</p>
+      <p className="vegetation-note">Reference vegetation at scenario start. {frame.local ? 'Polygon fuel patches burn out according to their vegetation class and time since ignition.' : 'The 1 km model uses supported cover estimates to assign a fuel duration.'} These measurements remain unchanged as simulated fuel is consumed. Fuel amount and burning time are scenario estimates, not measured fuel mass.</p>
     </section><code id="point-id">{point.cell_id}</code>
   </section>;
 }

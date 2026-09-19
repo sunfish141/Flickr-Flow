@@ -56,6 +56,18 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn('local', response.json())
         self.assertTrue(self.client.get('/api/config').json()['local_spread']['available'])
 
+    def test_polygon_cells_include_the_exact_grid_square_for_inspection(self):
+        from shapely.geometry import shape, Point
+        from shapely.ops import transform
+        from wildfire_data.core.grid import cell_from_id
+        for point in self.seed()['points']:
+            geometry = shape(point['cell_geometry'])
+            self.assertTrue(geometry.covers(Point(point['longitude'],point['latitude'])))
+            projected = transform(self.sampler.to_grid.transform,geometry)
+            self.assertAlmostEqual(projected.area,1e6,places=3)
+            for actual,expected in zip(projected.bounds,cell_from_id(point['cell_id']).bounds_projected):
+                self.assertAlmostEqual(actual,expected,places=6)
+
     def test_fixed_polygon_endpoint_advances_past_96_hours_without_restarting(self):
         from wildfire_data.model.local_spread import VEGETATED
         scenarios = self.client.app.state.local_scenarios

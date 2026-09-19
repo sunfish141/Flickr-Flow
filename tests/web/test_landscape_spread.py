@@ -182,6 +182,20 @@ class ExpandingTests(unittest.TestCase):
             self.scenarios.initialize(self.coordinates * 501, self.origin, satellite=True)
         self.assertEqual(self.store.loaded, loaded)
 
+    def test_three_hundred_observed_cells_keep_their_data_and_inspection_squares(self):
+        coordinates = [self.first.to_geo.transform(500+x*1000,500+y*1000)
+                       for x in range(20) for y in range(15)]
+        initial = self.scenarios.initialize(coordinates,self.origin,satellite=True)
+        self.assertEqual(len(initial['points']),300)
+        self.assertEqual(initial['active_patch_count'],300)
+        self.assertEqual(initial['metadata']['mapped_starting_cells'],300)
+        self.assertTrue(all(point['cell_geometry']['type']=='Polygon' for point in initial['points']))
+        advanced = self.step(initial)
+        self.assertTrue({point['cell_id'] for point in initial['points']}.issubset(
+            point['cell_id'] for point in advanced['points']))
+        self.assertLessEqual(len(advanced['state']['tiles']),self.scenarios.limits.max_tiles)
+        self.assertEqual(self.step(initial),advanced)
+
     def test_satellite_seeds_one_patch_and_reports_unsupported_cells(self):
         self.store.cover = [(box(0,0,1000,3000),'grassland'), (box(1000,0,3000,3000),'urban')]
         coords = [self.first.to_geo.transform(500,1500),self.first.to_geo.transform(1500,1500)]

@@ -100,9 +100,14 @@ class LocalScenarios:
         incident = hashlib.sha256(f'{model.identity}:{tuple(seeds)}:{origin.isoformat()}'.encode()).hexdigest()
         points = []
         for cell_id, areas in sorted(frame['cells'].items()):
-            lat, lon = cell_from_id(cell_id).center_wgs84
+            cell = cell_from_id(cell_id)
+            lat, lon = cell.center_wgs84
+            west, south, east, north = cell.bounds_projected
+            longitudes, latitudes = model.sampler.to_geo.transform(
+                [west,east,east,west,west], [south,south,north,north,south])
             active = areas['active_area_m2'] > 0
             points.append({'cell_id': cell_id, 'latitude': lat, 'longitude': lon,
+                'cell_geometry': {'type': 'Polygon', 'coordinates': [list(zip(longitudes,latitudes))]},
                 'status': 'active' if active else 'burned', 'intensity': min(1., areas['active_area_m2']/1e6),
                 'fuel_remaining': None, 'ignition_probability': None, 'new_ignition': False,
                 'source': 'Local fuel-patch scenario', 'observation_age_hours': None,

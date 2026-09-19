@@ -92,6 +92,21 @@ standard and weather ML polygon modes use these optimizations. Road/water
 barriers, fuel clocks and ML admission rules are unchanged. See the
 [measured performance and regression checks](verification.md#large-polygon-performance).
 
+Polygon fire cells are clickable 1 km inspection squares. Clicking one highlights
+the canonical grid cell and opens the same inspector as the coarse model, with
+active/burned area, mapped roads, coverage and vegetation evidence. The detailed
+fire perimeter still shows the actual simulated footprint; a square need not be
+fully burned. Selection follows the cell through burnout and timeline rewind.
+The cell list provides the same highlight through keyboard controls. Squares
+respect active/burned layer visibility, including cells containing both states.
+
+The capacity target is about **300 affected 1 km cells**, counting each cell once.
+A real Alberta weather/polygon run reached 305 cells with 50 tiles under the
+existing 128-tile/1.5-million-patch limits; those defaults remain unchanged.
+This is a tested scenario size, not a new 300-cell cutoff or a guarantee that
+widely scattered ignitions fit the same tile budget. See
+[capacity and inspection verification](verification.md#polygon-cell-inspection-and-300-cell-capacity).
+
 The map retains full scenario state while grouping dense markers for display.
 The searchable cell list pages through every cell, including observations whose
 map layer is hidden. Keyboard inspection restores focus when closed. The layout

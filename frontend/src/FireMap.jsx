@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { selectionKey, polygonCellVisible } from './mapCells';
 
 export default function FireMap({ frame, selectedCell, visibility, placing, basemap, mapApi, onPlace, onInspect, onGroup, onError }) {
   const container = useRef(null);
@@ -13,7 +14,8 @@ export default function FireMap({ frame, selectedCell, visibility, placing, base
       zoomAnimation: !reduced, fadeAnimation: !reduced, markerZoomAnimation: !reduced,
       maxBounds: [[22, -180], [85, -48]], maxBoundsViscosity: 0.8 }).setView([53.02, -117.31], 10);
     L.control.zoom({ position: 'topright' }).addTo(map);
-    const layers = { coverage: L.layerGroup().addTo(map), roads: L.layerGroup().addTo(map), burned: L.layerGroup().addTo(map), active: L.layerGroup().addTo(map), candidate: L.layerGroup().addTo(map), historical: L.layerGroup().addTo(map) };
+    const layers = { coverage: L.layerGroup().addTo(map), roads: L.layerGroup().addTo(map), burned: L.layerGroup().addTo(map), active: L.layerGroup().addTo(map), candidate: L.layerGroup().addTo(map), cells: L.layerGroup().addTo(map), selection: L.layerGroup().addTo(map), historical: L.layerGroup().addTo(map) };
+    const cellRenderer = L.svg({ padding: .2 });
     const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     });
@@ -25,6 +27,7 @@ export default function FireMap({ frame, selectedCell, visibility, placing, base
       Object.values(layers).forEach(layer => layer.clearLayers());
       const { frame, visibility, selectedCell } = latest.current;
       if (!frame) return;
+      const view = map.getBounds().pad(.1);
       if (frame.local) {
         if (frame.coverage) L.geoJSON(frame.coverage, { interactive: false, style: { color: '#537775', weight: 1.5, dashArray: '6 5', fill: false } }).addTo(layers.coverage);
         L.geoJSON(frame.roads, { style: { color: '#454a50', weight: 2, opacity: .6 },
@@ -42,14 +45,31 @@ export default function FireMap({ frame, selectedCell, visibility, placing, base
             fillColor: status === 'active' ? '#ee713b' : '#767169', fillOpacity: .55,
           } }).addTo(layers[status]);
         }
+        for (const point of frame.points) {
+          if (!point.cell_geometry || !polygonCellVisible(point, visibility)) continue;
+          const cell = L.geoJSON(point.cell_geometry, { renderer: cellRenderer, bubblingMouseEvents: false,
+            style: { className: 'polygon-cell', color: '#53676b', weight: 1, opacity: .45,
+              dashArray: '3 4', fill: true, fillOpacity: 0 },
+          });
+          if (!view.intersects(cell.getBounds())) continue;
+          const tooltip = document.createElement('span');
+          tooltip.textContent = '1 km² fire cell · click to inspect';
+          cell.bindTooltip(tooltip).on('click', () => latest.current.onInspect(point)).addTo(layers.cells);
+          cell.eachLayer(layer => layer.getElement()?.setAttribute('data-cell-id', point.cell_id));
+          if (selectedCell === selectionKey(point, true)) {
+            L.geoJSON(point.cell_geometry, { renderer: cellRenderer, interactive: false,
+              style: { className: 'selected-polygon-cell', color: '#087b94', weight: 3,
+                opacity: 1, fillColor: '#31a8c0', fillOpacity: .12 },
+            }).addTo(layers.selection);
+          }
+        }
       }
-      const view = map.getBounds().pad(.1);
       const visible = [...frame.points, ...(frame.historical?.points || [])].filter(p => view.contains([p.latitude, p.longitude]));
       const groups = new Map();
       for (const point of visible) {
         if (!visibility[point.status] || (frame.local && point.status !== 'historical')) continue;
         const pixel = map.project([point.latitude, point.longitude]);
-        const pointKey = `${point.status}:${point.cell_id}`;
+        const pointKey = selectionKey(point, frame.local);
         const key = visible.length > 1500 && map.getZoom() < 11 && pointKey !== selectedCell ?
           `${point.status}:${Math.floor(pixel.x / 32)}:${Math.floor(pixel.y / 32)}` : pointKey;
         if (!groups.has(key)) groups.set(key, []);
@@ -60,8 +80,9 @@ export default function FireMap({ frame, selectedCell, visibility, placing, base
         const active = point.status === 'active', candidate = point.status === 'candidate', historical = point.status === 'historical';
         const color = historical ? '#6536b3' : active ? '#b83e21' : candidate ? '#806229' : '#5d5a52';
         const marker = L.circleMarker([point.latitude, point.longitude], {
+          ...(frame.local ? { renderer: cellRenderer } : {}),
           radius: group.length > 1 ? Math.min(20, 7 + Math.log2(group.length)) + (historical ? 4 : 0) : historical ? 12 : active ? 5 + point.intensity * 4 : 5,
-          color, weight: selectedCell === `${point.status}:${point.cell_id}` ? 4 : historical ? 2 : 1,
+          color, weight: selectedCell === selectionKey(point, frame.local) ? 4 : historical ? 2 : 1,
           fillColor: active ? `hsl(${12 + (1 - point.intensity) * 24}, 85%, 55%)` : candidate ? '#efd5a6' : '#767169',
           fillOpacity: historical ? 0 : candidate ? .45 : .88, bubblingMouseEvents: false,
         });

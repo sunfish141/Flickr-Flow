@@ -330,3 +330,47 @@ restore on the restarted HTTP server and replay exactly after advancing.
 
 **185 Python tests and 14 frontend tests pass.** Local benchmark reports are
 retained under `artifacts/landscape-performance/large-polygon/`.
+
+## Polygon cell inspection and 300-cell capacity
+
+The target is about 300 **affected 1 km cells**, counted uniquely, rather than
+300 landscape tiles or 300 km² of completely burned ground. The existing limits
+remain 128 tiles and 1.5 million patches; no new 300-cell cutoff is imposed.
+
+A real Alberta weather/polygon run with the trained model, retained roads and
+vegetation, pinned weather and nine fixed satellite-style initial cells reached
+**305 affected cells** at 384 simulated hours. It used **50 tiles**, with 270,138
+burned patches and 3,375 active patches. Burned area was 232.81 km² and active
+area 2.92 km². Some cells contain both states, so active/burned cell counts overlap.
+The last expansion took 18.55 s and identical replay took 0.34 s. After a 39.64 s
+cold restoration of the existing incident, subsequent steps ranged from 0.59 to
+18.55 s on this machine. This is a capacity check, not a latency or forecast
+accuracy guarantee; the long run uses the existing, explicitly labeled weather
+assumptions once captured forecast coverage ends. Spatial budgets can still bind
+earlier for widely separated ignitions or unusually fragmented geometry.
+
+Polygon responses now include canonical grid footprints in `point.cell_geometry`.
+Clicking a square highlights it and opens active/burned area, road/coverage data
+and the existing vegetation inspector. The square is an inspection region;
+detailed perimeters continue to show the fire footprint. Selection survives
+burnout and timeline rewind, and keyboard cell-list selection uses the same
+highlight. Hidden fire layers remove their inspection squares; cells containing
+both active and burned patches remain selectable when either layer is visible.
+
+Validation: **44 targeted Python API checks and 16 frontend tests passed**. New
+API checks verify the canonical square and retention/replay of 300 seeded cells.
+Production-browser checks passed for standard and weather ML polygon clicks,
+real vegetation retrieval, burnout, rewind, hidden layers, keyboard focus and
+390 px layout. A recorded real 305-cell frame was used as an explicit display
+fixture: all 305 squares rendered and selection showed matching data. A separate
+historical-marker fixture verified that purple markers remain selectable above
+polygon hit regions. Existing coarse-model, cancellation, playback, mobile and
+accessibility browser regressions also passed. Basemap imagery was stubbed.
+
+Evidence is retained under `artifacts/polygon-inspection/`. To repeat browser
+verification with a prepared server (the recorded large frame is optional):
+
+```bash
+python tests/web/browser_polygon_inspection.py http://127.0.0.1:8000 \
+  artifacts/polygon-inspection/capacity-frame.json
+```

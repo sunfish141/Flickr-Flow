@@ -4,6 +4,7 @@ import Inspector from './Inspector';
 import HistoricalInspector from './HistoricalInspector';
 import CellList from './CellList';
 import { useScenario } from './useScenario';
+import { selectionKey } from './mapCells';
 
 export default function App() {
   const sim = useScenario();
@@ -20,7 +21,7 @@ export default function App() {
   const [selectedCell, setSelectedCell] = useState(null);
   const mapApi = useRef(null), help = useRef(null), inspectorHeading = useRef(null), returnFocus = useRef(null);
   const points = [...(frame?.points || []), ...(frame?.historical?.points || [])];
-  const selected = points.find(p => `${p.status}:${p.cell_id}` === selectedCell);
+  const selected = points.find(p => selectionKey(p, frame?.local) === selectedCell);
   const daily = !!frame?.historical;
   const stepHours = daily ? 24 : 12;
   const historicalDates = config?.historical_firms;
@@ -33,8 +34,8 @@ export default function App() {
   const inspect = (point, trigger) => {
     sim.pause(); setPlacing(false);
     returnFocus.current = trigger || document.getElementById('map');
-    setSelectedCell(`${point.status}:${point.cell_id}`);
-    if (`${point.status}:${point.cell_id}` === selectedCell) inspectorHeading.current?.focus();
+    setSelectedCell(selectionKey(point, frame?.local));
+    if (selectionKey(point, frame?.local) === selectedCell) inspectorHeading.current?.focus();
   };
   useEffect(() => { if (selectedCell) inspectorHeading.current?.focus(); }, [selectedCell]);
   const closeInspector = () => {
@@ -173,7 +174,7 @@ export default function App() {
         <FireMap frame={frame} selectedCell={selectedCell} visibility={visibility} placing={placing && canPlace} basemap={basemap} mapApi={mapApi} onPlace={add} onInspect={inspect} onGroup={() => { sim.pause(); setPlacing(false); }} onError={text => sim.message(text, true)} />
         <div className="map-title">{selectedPreset ? `${selectedPreset.label.toUpperCase()} · POLYGON SPREAD` : sim.localRegion ? 'LOCAL LANDSCAPE · EXPERIMENTAL SCENARIO' : 'NORTH AMERICA · 1 KM GRID'}</div>
         <button id="fit" className="map-button" onClick={fit}>Fit fires</button>
-        <div id="map-instruction" className="map-instruction">{placing ? 'Click the map to add starting fire cells.' : frame ? 'Inspect cells on the map or in the scenario cell list.' : 'Start with a fire or current satellite detections.'}</div>
+        <div id="map-instruction" className="map-instruction">{placing ? 'Click the map to add starting fire cells.' : frame?.local ? 'Click a 1 km square to highlight it and inspect fire and vegetation data.' : frame ? 'Inspect cells on the map or in the scenario cell list.' : 'Start with a fire or current satellite detections.'}</div>
         <div id="status" className={`status ${status.error ? 'error' : ''} ${status.text ? '' : 'empty'}`} role="status" aria-live="polite" aria-atomic="true">{status.text}{busy && <span aria-hidden="true"> · {sim.busySeconds} s elapsed</span>}</div>
         {selected && (selected.status === 'historical' ? <HistoricalInspector point={selected} historical={frame.historical} onClose={closeInspector} headingRef={inspectorHeading} /> : <Inspector point={selected} frame={frame} onClose={closeInspector} headingRef={inspectorHeading} />)}
         <section className="playback" aria-label="Simulation playback">

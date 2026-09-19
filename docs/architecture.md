@@ -98,6 +98,14 @@ The browser owns completed frames and playback timing. Request bodies contain
 the full versioned model state. The API does not maintain per-user sessions or
 silently truncate source data to fit display limits.
 
+Each polygon response point includes `cell_geometry`, the canonical 1 km square's
+corners transformed from ESRI:102008 into WGS84. These are inspection footprints;
+the detailed perimeters remain the fire geometry. Leaflet draws selectable square
+outlines and a separate non-interactive selection highlight. Historical markers
+stay above these hit targets. Polygon selection uses cell identity independently
+of active/burned status, so the inspector survives burnout and rewind. The same
+inspector uses existing per-cell fire/road fields and the cached vegetation API.
+
 The coarse preview's `model/fuel.py` assigns vegetation-based durations while
 leaving offline training transition classes unchanged. Fuel-aware active and
 evidence subclasses carry duration, vegetation fraction and basis through
