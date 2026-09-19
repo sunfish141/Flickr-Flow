@@ -30,17 +30,18 @@ training was unsupported by the retained historically eligible evidence.
 
 ## Capabilities awaiting optional resources
 
-At the reconstruction checkpoint, the trained public-CSV artifacts are present
-locally, while the repository has no restored `data/` archive. Normal operation
-therefore still needs the following inputs to enable these capabilities:
+The local repository now contains trained public-CSV models and restored
+vegetation, polygon pilots and national road data. Repeat preparation passed
+without the old repository or network. See [startup data](startup-data.md).
+The following resources remain external to Git and are needed on other machines:
 
 | Capability | Missing input |
 | --- | --- |
 | Broader terrain coverage | Compatible ETOPO blocks beyond the CSV lookup. |
 | Historical comparisons | Coverage ledgers and normalized detections for all three retained VIIRS feeds. |
-| Vegetation measurements | Verified vegetation feature store and/or eligible NALCMS/MOD44B sources named in the configuration. |
-| Fixed fuel/road scenarios | Compatible native Edson/Boulder pilot bundles, or explicitly configured equivalents. |
-| Expanding fuel/road scenarios | Completed indexed road archive, source NALCMS rasters and configured raster cache. |
+| Vegetation measurements | Restored locally. Startup can download public NALCMS; canopy requires retained MOD44B/store data. Quality thresholds still leave some cells without canopy estimates. |
+| Fixed fuel/road scenarios | Restored locally. Compatible Edson/Boulder bundles or explicitly configured equivalents are required elsewhere. |
+| Expanding fuel/road scenarios | Restored locally. Requires the completed road archive; NALCMS and its direct-access raster cache are prepared at startup. |
 | Live observations | A server-side FIRMS credential and working provider connection; no live feed integration was claimed from browser fixtures. |
 
 [Provider documentation](providers.md) identifies the concrete paths and
@@ -60,10 +61,12 @@ but does not establish that its inputs were available during May–August.
 
 ## Verification and operation boundaries
 
-The checkpoint passed 74 Python tests, 11 frontend tests and production-browser
-checks. Real API checks used the trained coarse model. Large-display and
-historical browser cases used explicit fixtures; optional source engines also
-have synthetic tests. These do not establish full real-archive integration.
+The checkpoint passed 116 Python tests, 11 frontend tests and production-browser
+checks. Real API/browser checks used the trained coarse model and restored
+vegetation/road sources, including polygon expansion and replay. Large-display
+and historical browser cases used explicit fixtures; engine edge cases also
+have synthetic tests. Live NASA and real historical archive integration remain
+separate from these checks.
 Automated accessibility checks found no violations in the tested states;
 manual assistive-technology testing remains separate. See [verification](verification.md).
 

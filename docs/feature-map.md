@@ -15,6 +15,13 @@ source code or raw archive. Weather inference is available as a batch command
 over observed examples, not as map forecast weather. Historical/vegetation/fine
 capabilities report absent sources rather than synthesizing them from labels.
 
+Vegetation and polygon sources now prepare at startup, and their real archives
+are restored locally. The inspector reports measured land cover and canopy
+estimates with sufficient quality support. Simulation choices include **Polygon
+spread · roads & fuel** and Edson/Boulder pilots. Polygons use native roads and
+fuel patches, expand over local tiles and support timeline replay. See
+[startup preparation and measured checks](startup-data.md).
+
 Playback stores the most recent 128 complete frames. Scrubbing pauses requests;
 resuming traverses saved frames before extending the simulation. Pause, reset,
 source changes and hiding the tab discard pending results without clearing the

@@ -16,6 +16,7 @@ from wildfire_data.providers.terrain_csv import CSVTerrainProvider
 from wildfire_data.web.historical_firms import HistoricalFirmsStore
 from wildfire_data.web.local_spread import LocalScenarios
 from wildfire_data.web.vegetation import load_inspector_sampler
+from wildfire_data.core.paths import REPOSITORY_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,27 @@ class Runtime:
         self.model_error = None
         self.public_model = False
         self.local_scenarios = LocalScenarios(None)
+        self.data_preparation = {'enabled': False, 'errors': {}}
 
     def start(self):
+        local_config = self.settings.local_config
+        vegetation_config = REPOSITORY_ROOT / 'config/vegetation_inspector.json'
+        raster_cache = None
+        if self.load_defaults and self.settings.prepare_data:
+            from wildfire_data.providers.startup_data import StartupData
+            self.data_preparation['enabled'] = True
+            try:
+                prepared = StartupData(self.settings.data_root, self.settings.source_data_root,
+                    budget_path=REPOSITORY_ROOT / 'config/storage_budget.json',
+                    allow_downloads=self.settings.download_vegetation).prepare(local_config, vegetation_config)
+                local_config, vegetation_config = prepared['local_config'], prepared['vegetation_config']
+                raster_cache = prepared['raster_cache']
+                self.data_preparation['errors'] = prepared['errors']
+            except Exception:
+                logger.exception('Startup data preparation failed; existing sources will still be tried')
+                self.data_preparation['errors']['startup'] = 'Data preparation failed; check startup logs and restart to retry.'
         try:
-            self.local_scenarios = LocalScenarios(self.settings.local_config if self.load_defaults else None)
+            self.local_scenarios = LocalScenarios(local_config if self.load_defaults else None)
         except Exception:
             logger.warning('Optional landscape sources could not be initialized')
         if self.historical is None and self.load_defaults:
@@ -68,7 +86,8 @@ class Runtime:
         if self.vegetation is None and self.load_defaults:
             try:
                 self.vegetation = load_inspector_sampler(self.settings.vegetation_manifest,
-                    primary=getattr(self.model, 'vegetation_sampler', None))
+                    primary=getattr(self.model, 'vegetation_sampler', None),
+                    config_path=vegetation_config, raster_cache=raster_cache)
             except Exception:
                 logger.warning('Optional vegetation sources unavailable')
 

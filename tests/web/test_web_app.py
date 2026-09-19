@@ -190,9 +190,12 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(survived['observation_age_hours'], 18.)
 
     def test_model_failure_serves_actionable_page(self):
+        from dataclasses import replace
+        from wildfire_data.web.settings import Settings
+        settings = replace(Settings.from_environment(), prepare_data=False)
         with patch('wildfire_data.web.runtime.load_pass_model', side_effect=FileNotFoundError('missing')):
             with self.assertLogs('wildfire_data.web.runtime', level='ERROR'):
-                with TestClient(create_app(allowed_hosts=['testserver'], )) as client:
+                with TestClient(create_app(allowed_hosts=['testserver'], settings=settings, vegetation_sampler=object())) as client:
                     self.assertEqual(client.get('/').status_code, 200)
                     self.assertFalse(client.get('/api/config').json()['model_ready'])
                     self.assertEqual(client.post('/api/seed', json={'ignitions': [dict(latitude=53, longitude=-117, intensity=.7)]}).status_code, 503)

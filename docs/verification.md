@@ -6,7 +6,7 @@ the committed React sources.
 
 | Check | Result |
 | --- | --- |
-| Python behavior/regression suite | 74 tests passed |
+| Python behavior/regression suite | 116 tests passed |
 | Frontend API, timeline and cancellation unit tests | 11 tests passed |
 | Production Chromium interactions | Passed |
 | Automated axe WCAG A/AA checks | No violations in five tested states |
@@ -42,6 +42,11 @@ simulation. The four focused FIRMS tests passed after aligning the missing-key
 message with environment-based configuration. This was not a fresh dependency
 installation or a live NASA connectivity check.
 
+The later vegetation/polygon restoration passed real-source API and Chromium
+checks for canopy inspection, road geometry, perimeters, expansion and replay.
+Startup also passed without the old repository or downloads after restoration.
+See [startup data verification](startup-data.md#verification) for measurements.
+
 ## Repeat the checks
 
 Install the Python dependencies from `requirements.lock` and run `npm ci` in
@@ -71,6 +76,7 @@ python tests/web/browser_app.py http://127.0.0.1:8001
 
 The browser suite requires a ready model. Train the public-CSV model first using
 the root README commands, or explicitly configure trusted compatible artifacts.
-Without retained native vegetation, road and historical sources, those optional
-features remain unavailable in normal operation. Model files and source data
-are local ignored artifacts; syncing code alone does not transfer them.
+Startup now restores or prepares vegetation and road sources; the local copy
+has passed real-data checks. Real historical comparisons still require their
+retained source archive. Models and source data are ignored artifacts; syncing
+code alone does not transfer them.

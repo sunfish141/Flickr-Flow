@@ -20,6 +20,8 @@ def register_routes(app, runtime):
             "local_spread": runtime.local_scenarios.configuration(),
             "model_name": ('Frontier CSV model' if runtime.public_model else f"Incident model · {runtime.settings.pass_name.replace('_', ' ')}"), "research_preview": True,
             "firms_configured": bool(runtime.settings.firms_key or runtime.firms_loader), "step_hours": 12,
+            "vegetation_available": runtime.vegetation is not None,
+            "data_preparation": runtime.data_preparation,
             "max_steps": None, "default_speed_seconds": 3, "max_seed_cells": 500,
             "transition": runtime.model.transition_contract() if runtime.model_error is None else None,
             "firms_bounds": list(DEFAULT_BOUNDS),

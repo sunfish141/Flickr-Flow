@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "whole_data_cap_bytes": 37000000000,
+  "whole_data_cap_label": "37 GB decimal operational guardrail; includes offline roads and fast local land-cover access",
+  "scope": "Every file under data/, including raw responses, normalized data, CSV exports, manifests, staging, and derived views.",
+  "categories": [
+    {
+      "key": "firms_and_detection_evidence",
+      "cap_bytes": 750000000,
+      "priority_score": 100,
+      "pinned": true,
+      "retention": "Keep all FIRMS source CSVs and one compact canonical detection representation."
+    },
+    {
+      "key": "operational_labels_and_progression",
+      "cap_bytes": 3000000000,
+      "priority_score": 95,
+      "pinned": true,
+      "retention": "Keep WFIGS/IRWIN revision deltas, FEDS, CWFIS active fires, and Fire M3 perimeters; exclude redundant Fire M3 hotspots."
+    },
+    {
+      "key": "viirs_l2_paired_cutouts",
+      "cap_bytes": 3000000000,
+      "priority_score": 90,
+      "pinned": true,
+      "retention": "Keep only selected fire-mask/QA/geolocation source pairs and compact coverage tiles; never keep an unpaired fire or geolocation asset."
+    },
+    {
+      "key": "issued_weather_tiles",
+      "cap_bytes": 5000000000,
+      "priority_score": 85,
+      "pinned": true,
+      "retention": "Keep Open-Meteo historical weather and optional issued Single Runs fire-context tiles, raw source responses, candidate-cell mappings, and source metadata for a fixed variable and lead-time set."
+    },
+    {
+      "key": "static_cell_features",
+      "cap_bytes": 19000000000,
+      "priority_score": 70,
+      "pinned": true,
+      "retention": "Keep shared terrain, NALCMS and vegetation evidence, the compact offline US/Canada road snapshot, and derived landscape tiles. Preserve native road geometry and source attributes; forecast actual growth and avoid duplicate national copies."
+    },
+    {
+      "key": "derived_training_views",
+      "cap_bytes": 4000000000,
+      "priority_score": 50,
+      "pinned": false,
+      "retention": "Keep compact model-ready partitions. These are the only automatically evictable outputs after their lineage is verified."
+    },
+    {
+      "key": "manifests_staging_and_headroom",
+      "cap_bytes": 2250000000,
+      "priority_score": 100,
+      "pinned": true,
+      "retention": "Reserve for manifests, atomic staging, retries, and filesystem overhead."
+    }
+  ]
+}

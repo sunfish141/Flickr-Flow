@@ -13,5 +13,6 @@ config/*
 !config/vegetation_inspector.json
 !config/vegetation_inspector_sources.json
 !config/local_spread.json
+!config/storage_budget.json
 data/
 node_modules/

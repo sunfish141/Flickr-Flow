@@ -24,8 +24,9 @@ LAND_TYPES = {
 class InspectorSampler:
     """Supplement sparse model evidence with bounded, on-demand national land cover."""
 
-    def __init__(self, primary, source_config, *, max_cached_cells=8192):
+    def __init__(self, primary, source_config, *, max_cached_cells=8192, raster_cache=None):
         self.primary = primary
+        self.raster_cache = raster_cache
         config_path = Path(source_config)
         config = json.loads(config_path.read_text())
         self.policy = config['policy']
@@ -63,7 +64,7 @@ class InspectorSampler:
         with self._lock:
             if cell_id not in self._cache:
                 if self._raster is None:
-                    self._raster = SourceRaster(self.land_source)
+                    self._raster = SourceRaster(self.land_source, cache_manifest=self.raster_cache)
                 self._cache[cell_id] = {**self._raster.sample(cell_id), 'source': self.land_source}
                 if len(self._cache) > self._max_cached_cells:
                     self._cache.popitem(last=False)
@@ -86,18 +87,18 @@ class InspectorSampler:
                 self.primary.close()
 
 
-def load_inspector_sampler(manifest_path=None, *, primary=None):
-    config = REPOSITORY_ROOT / 'config/vegetation_inspector.json'
+def load_inspector_sampler(manifest_path=None, *, primary=None, config_path=None, raster_cache=None):
+    config = Path(config_path) if config_path else REPOSITORY_ROOT / 'config/vegetation_inspector.json'
     reference = json.loads(config.read_text())
-    if primary is None:
+    if primary is None and (manifest_path or reference.get('manifest_path')):
         try:
-            primary = (VegetationFeatureSampler(Path(manifest_path)) if manifest_path else
+            primary = (VegetationFeatureSampler(Path(manifest_path), raster_cache=raster_cache) if manifest_path else
                        VegetationFeatureSampler(config.parent / reference['manifest_path'],
-                                                expected_sha256=reference['manifest_sha256']))
+                                                expected_sha256=reference['manifest_sha256'], raster_cache=raster_cache))
         except Exception:
             logging.getLogger(__name__).warning('Canopy inspector store unavailable', exc_info=True)
     try:
-        return InspectorSampler(primary, config.parent / reference['land_cover_sources_path'])
+        return InspectorSampler(primary, config.parent / reference['land_cover_sources_path'], raster_cache=raster_cache)
     except Exception:
         logging.getLogger(__name__).warning('National inspector land cover unavailable', exc_info=True)
         return primary

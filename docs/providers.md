@@ -1,7 +1,8 @@
 # Providers and configuration
 
-The app reads local sources and transient live observations. It does not collect
-training archives or infer missing source geometry from training labels.
+The app prepares vegetation/road sources on startup and reads local sources and
+transient live observations. It does not collect training archives or infer
+missing source geometry from labels. See [startup preparation](startup-data.md).
 `create_app()` in [web/app.py](../src/wildfire_data/web/app.py) accepts a model
 and providers for tests and integrations. The model layer does not import the
 web layer.
@@ -19,6 +20,9 @@ root when using the paths below.
 | `WILDFIRE_MODEL_PASS` | Legacy run pass, default `pass_2`. Public-CSV runs select their frontier artifact directly. |
 | `WILDFIRE_ASSET_ROOT` | Base for the legacy run and default `data/`. Defaults to the repository, except when its parent contains a `data/` directory. Set this explicitly when sharing archives. |
 | `WILDFIRE_DATA_ROOT` | Overrides the terrain/historical source root, default `<asset-root>/data`. |
+| `WILDFIRE_SOURCE_DATA_ROOT` | Retained archive for missing vegetation/road imports, default `../wildfiredetection/data` beside this repo. Completed local copies no longer depend on it. |
+| `WILDFIRE_PREPARE_DATA` | Default `1`; set `0` to use directly configured sources without startup preparation. |
+| `WILDFIRE_DOWNLOAD_VEGETATION` | Default `1`; set `0` to disable public NALCMS downloads while allowing local imports. |
 | `WILDFIRE_LOCAL_CONFIG` | Local landscape configuration, default `config/local_spread.json` under the repository. Paths inside this JSON resolve relative to that JSON file. |
 | `WILDFIRE_VEGETATION_MANIFEST` | Explicit vegetation feature-store manifest. Without it, `config/vegetation_inspector.json` supplies the store reference and expected digest. National land-cover fallback still uses the source configuration named in that JSON. |
 | `WILDFIRE_ALLOWED_HOSTS` | Comma-separated accepted hostnames, default `localhost,127.0.0.1`. |
@@ -31,12 +35,14 @@ For example, explicitly select a locally trained run and local source root:
 export WILDFIRE_RUN_MANIFEST=artifacts/public-csv/run_manifest.json
 export WILDFIRE_DATA_ROOT=data
 PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
-  python -m uvicorn wildfire_data.web.app:app --host 127.0.0.1 --port 8001
+  python -m uvicorn wildfire_data.web.app:app --host 127.0.0.1 --port 8000
 ```
 
-Changing the asset/data root does not rewrite paths inside vegetation or
-landscape configuration files. Restore the referenced files at those paths, or
-update the configuration with the correct paths and verified hashes. The existing
+Startup preparation restores archived references under the selected data root
+and generates runtime configurations there. With `WILDFIRE_PREPARE_DATA=0`,
+changing the asset/data root does not rewrite paths inside vegetation or
+landscape configuration files; restore the referenced files or update their
+paths and hashes explicitly. The existing
 hashes identify specific retained resources; unrelated replacements need their
 own provenance and compatible manifests.
 
@@ -51,10 +57,11 @@ own provenance and compatible manifests.
 | `historical_store` | Has `available` and `load(day, bounds) -> (normalized_rows, display)`. Rows use the live aggregator's detection schema. Display includes date, bounds, detection/cell counts and historical points. The built-in `HistoricalFirmsStore` is the reference. |
 | `vegetation_sampler` | Has `sample_cell(cell_id, *, cutoff_at, simulation_at)` and a `sources` mapping. Returns the vegetation feature/missingness/lineage schema consumed by `web.vegetation.vegetation_summary`. The scenario origin remains the evidence cutoff during playback. |
 
-Supplying `model` without explicit `settings` or `local_config` skips default
-optional source loading. This supports isolated API tests; explicitly supplied
-providers still apply. Supplying `settings` enables normal default loading for
-any providers not injected. Injected vegetation samplers remain caller-owned;
+Supplying `model` without explicit `settings` disables automatic preparation;
+without `local_config` it also skips default optional source loading. Explicitly
+supplied providers still apply. Supplying `settings` enables default loading for
+providers not injected; its `prepare_data` field controls preparation. Injected
+vegetation samplers remain caller-owned;
 the runtime closes its own vegetation and landscape resources on shutdown.
 
 Terrain/inference, live FIRMS, historical reads and vegetation sampling have

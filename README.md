@@ -4,7 +4,8 @@ An incremental, standalone recreation of the React frontend, FastAPI backend,
 and wildfire models. This repository runs with `src` alone on the Python
 path; it does not import another application's source. Original spatial and
 prediction algorithms are ported to preserve trusted-model compatibility.
-Runtime readers live in `providers/`; bulk collection commands are excluded.
+Runtime readers and startup source preparation live in `providers/`; the bulk
+training-data collection pipeline is excluded.
 
 The runtime separates API routes, resource lifecycle, and portable
 settings. Existing model and state contracts remain supported. The frontend
@@ -32,17 +33,26 @@ npm ci
 npm run build
 cd ..
 PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
-  python -m uvicorn wildfire_data.web.app:app --host 127.0.0.1 --port 8001
+  python -m uvicorn wildfire_data.web.app:app --host 127.0.0.1 --port 8000
 ```
 
 `node frontend/build.mjs` is equivalent to the build script when dependencies
 are already installed. Compiled assets are included. Open localhost on port
-8001; another application can continue using port 8000. A new checkout also
+8000. The first startup prepares vegetation and polygon data, with progress
+in the server log. A new checkout also
 needs trusted model artifacts: use the training commands below with the supplied
 CSV release. The server can serve the interface without a model, but reports
 the model unavailable and disables coarse simulation until configured.
 
 ## Local resources
+
+Vegetation and polygon spread now prepare automatically at startup. Missing
+configured resources are copied from `WILDFIRE_SOURCE_DATA_ROOT` (by default
+the sibling `wildfiredetection/data` archive). Missing public NALCMS land cover
+can be downloaded and verified; canopy and roads reuse retained archives.
+Subsequent starts use this repository's own files. See [startup data preparation](docs/startup-data.md)
+for storage, controls and measured checks. Choose **Polygon spread · roads & fuel**
+in the app to use the restored expanding engine.
 
 The public training data is in `htn_training/`. For geospatial playback, set
 `WILDFIRE_ASSET_ROOT` to an existing directory containing retained `data/` and
@@ -121,11 +131,12 @@ node --test frontend/tests/*.test.js
 Tests include the reference behavior contracts for grid identity, finite-fuel
 spread, local road barriers, HTTP validation, live observations, and historical
 comparison. Runtime preparation uses a single worker and bounded shared caches.
-The verified checkpoint passes 74 Python tests, 11 frontend tests, and production
+The verified checkpoint passes 116 Python tests, 11 frontend tests, and production
 Chromium checks for playback races, historical replay, 128-frame history,
 2,000-cell displays, keyboard focus and mobile layout. See
 [verification instructions and fixture boundaries](docs/verification.md) to
-repeat the browser checks.
+repeat the browser checks. Real-source vegetation and polygon playback have an
+additional [browser and API verification](docs/startup-data.md#verification).
 
 This is a research preview. The coarse map transition uses no weather; local
 fuel/road travel is an uncalibrated scenario. The offline weather classifier

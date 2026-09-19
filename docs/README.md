@@ -12,7 +12,7 @@ The application is being rebuilt incrementally from `recreate-project-prompt.md`
    all map and source controls, and verify interactions with browser tests.
 
 All three implementation milestones are complete. The model run uses the
-real public release; **74 Python tests and 11 frontend tests pass**, saved-model
+real public release; **116 Python tests and 11 frontend tests pass**, saved-model
 evaluation reproduces all recorded scores, and real-model API replay is
 deterministic. Production-browser checks cover request cancellation, historical
 replay, keyboard controls, mobile layout and automated accessibility. See
@@ -24,6 +24,11 @@ resource requirements.
 The handoff also includes [provider contracts and configuration](providers.md)
 and [research limitations and missing inputs](limitations.md). These describe
 what a code-only checkout needs before it can reproduce the locally tested run.
+
+[Startup vegetation and polygon restoration](startup-data.md) extends the
+initial reconstruction: automatic source preparation now restores measured
+vegetation, fixed polygon pilots and expanding road-aware fuel patches. These
+capabilities passed real-data API and browser checks in this repository.
 
 Each milestone is tested before commit; the user syncs it at the checkpoint. Existing training data,
 license, configurations, and the original application repository are preserved.

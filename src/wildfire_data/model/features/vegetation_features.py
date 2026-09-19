@@ -182,7 +182,7 @@ def select_features(records, *, cutoff_at, simulation_at, policy):
 
 
 class VegetationFeatureSampler:
-    def __init__(self, manifest_path, *, expected_sha256=None, max_cached_cells=8192):
+    def __init__(self, manifest_path, *, expected_sha256=None, max_cached_cells=8192, raster_cache=None):
         self.manifest_path = Path(manifest_path).resolve()
         self.manifest_sha256 = sha256_file(self.manifest_path)
         if expected_sha256 is not None and self.manifest_sha256 != expected_sha256:
@@ -201,8 +201,11 @@ class VegetationFeatureSampler:
         if path.parent != self.manifest_path.parent or sha256_file(path) != artifact["sha256"]:
             raise ValueError("vegetation cell artifact checksum/path mismatch")
         self.sources = self.manifest["sources"]
+        self.raster_cache = raster_cache
         for identity, source in self.sources.items():
             validate_source(source)
+            for asset in source['assets']:
+                asset['path'] = str((self.manifest_path.parent / asset['path']).resolve())
             if identity != source["source_id"]:
                 raise ValueError("vegetation source identity mismatch")
         # A connection per read avoids sharing sqlite connections across the
@@ -239,7 +242,7 @@ class VegetationFeatureSampler:
                                 if path not in checked and sha256_file(path) != asset['sha256']:
                                     raise ValueError('vegetation fallback raster checksum mismatch')
                                 checked.add(path)
-                            self.rasters[identity] = SourceRaster(source)
+                            self.rasters[identity] = SourceRaster(source, cache_manifest=self.raster_cache)
                         records.append(self.rasters[identity].sample(cell_id))
             records = [{**r, "source": self.sources[r["source_id"]]} for r in records]
         with self.cache_lock:

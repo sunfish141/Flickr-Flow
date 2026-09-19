@@ -15,6 +15,9 @@ class Settings:
     allowed_hosts: tuple[str, ...] = ('localhost', '127.0.0.1')
     vegetation_manifest: str | None = None
     firms_key: str = ''
+    prepare_data: bool = False
+    download_vegetation: bool = True
+    source_data_root: Path | None = None
 
     @classmethod
     def from_environment(cls):
@@ -34,4 +37,7 @@ class Settings:
             allowed_hosts=tuple(h.strip() for h in os.getenv('WILDFIRE_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()),
             vegetation_manifest=os.getenv('WILDFIRE_VEGETATION_MANIFEST'),
             firms_key=os.getenv('NASA_FIRMS_API_KEY') or os.getenv('MAP_KEY') or '',
+            prepare_data=os.getenv('WILDFIRE_PREPARE_DATA', '1') != '0',
+            download_vegetation=os.getenv('WILDFIRE_DOWNLOAD_VEGETATION', '1') != '0',
+            source_data_root=Path(os.getenv('WILDFIRE_SOURCE_DATA_ROOT', str(root.parent / 'wildfiredetection/data'))),
         )

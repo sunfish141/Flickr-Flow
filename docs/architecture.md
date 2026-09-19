@@ -14,6 +14,12 @@ deserializing; HTTP clients cannot supply artifact paths.
 
 `providers/` holds source readers and bounded local landscape preparation.
 There are no bulk collection entry points or simulation-time road downloads.
+Before serving requests, `providers/startup_data.py` verifies local sources,
+imports configured vegetation/roads, or downloads pinned public NALCMS when
+missing. Preparation is serialized and uses atomic files and storage admission.
+Runtime-only configs and portable vegetation manifests keep the copied sources
+independent of the old repository. Inspector and landscape sampling share the
+staged TIFF cache. See [startup data](startup-data.md).
 The CSV-only terrain provider returns explicit missingness outside the retained
 candidate-cell lookup; source rasters remain necessary for broader terrain,
 vegetation, historical observations and fine road geometry.

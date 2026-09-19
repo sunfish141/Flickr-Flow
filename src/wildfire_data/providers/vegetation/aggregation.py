@@ -50,7 +50,7 @@ def raster_path(asset, *, cache_manifest=None):
 class SourceRaster:
     """Open one product mosaic once, read only candidate-cell windows."""
 
-    def __init__(self, source):
+    def __init__(self, source, *, cache_manifest=None):
         self.source = source
         self.stack = ExitStack()
         self.tiles = []
@@ -69,7 +69,7 @@ class SourceRaster:
                 # shutdown on another thread. Keep GDAL environment lifetimes
                 # local to opening, instead of binding them to reader.close().
                 with rasterio.Env():
-                    root = rasterio.open(raster_path(asset))
+                    root = rasterio.open(raster_path(asset, cache_manifest=cache_manifest))
                 self.stack.callback(root.close)
                 readers = {}
                 for name, band in asset["bands"].items():

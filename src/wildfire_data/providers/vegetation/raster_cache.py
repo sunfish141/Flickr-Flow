@@ -1,6 +1,7 @@
 """Optional, checksummed temporary TIFF staging for large offline builds."""
 
 import argparse
+from contextlib import ExitStack
 from functools import lru_cache
 import gzip
 import hashlib
@@ -56,7 +57,9 @@ def stage_sources(config_path, directory, *, data_root=None):
             if path not in checked and sha256_file(path) != asset['sha256']:
                 raise ValueError('Source archive changed before staging')
             checked.add(path)
-            with gzip.open(path, 'rb') as wrapped, zipfile.ZipFile(wrapped) as archive:
+            with ExitStack() as stack:
+                wrapped = stack.enter_context(gzip.open(path, 'rb')) if path.suffix == '.gz' else path
+                archive = stack.enter_context(zipfile.ZipFile(wrapped))
                 entry = archive.getinfo(asset['member'])
                 if staged_bytes + entry.file_size > 3_500_000_000:
                     raise ValueError('Temporary NALCMS staging exceeds 3.5 GB')

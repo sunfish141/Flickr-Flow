@@ -1,0 +1,93 @@
+# Vegetation and polygon-spread startup
+
+The server now prepares vegetation and road resources before accepting requests:
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
+  python -m uvicorn wildfire_data.web.app:app --host 127.0.0.1 --port 8000
+```
+
+First-startup progress appears in the server log. This machine imported **89
+verified files** from the retained archives, with no downloads. The copied
+runtime data and initial derived tiles occupy approximately **17.18 GB**, under
+this repository's ignored `data/` directory. Repeat preparation passed with the
+old repository and downloads disabled: **zero imports and zero downloads**.
+
+## Preparation and configuration
+
+Startup first verifies local files, then imports missing configured resources
+from `WILDFIRE_SOURCE_DATA_ROOT`, defaulting to the sibling
+`../wildfiredetection/data`. Only vegetation stores/rasters, the direct-access
+land-cover cache, polygon pilots and the completed road archive are imported.
+Files are independent copies; no old application code or environment is loaded.
+
+If NALCMS land-cover archives are missing, startup downloads the pinned public
+CEC ZIPs, verifies their provider hashes and stages selected TIFF members.
+Each download is bounded to 4 GB and subject to the storage budget. Actual
+capture times are recorded; a new download is not backdated to the original
+archive. Land cover can serve without canopy data. Canopy density requires the
+retained MOD44B rasters and feature store; authenticated NASA collection is not
+performed automatically, and missing density is never invented.
+
+The canopy store receives a portable manifest with local relative asset paths;
+the original manifest/database remain intact. All road partitions, coverage and
+manifest hashes must verify. On another machine, supply the retained road
+archive through `WILDFIRE_SOURCE_DATA_ROOT`; startup does not recollect the
+national road network. Simulation-time tile preparation uses only local roads.
+
+Runtime configurations are generated under `data/runtime/`; repository configs
+remain unchanged. Both the inspector and polygon engine use staged land-cover
+TIFFs. Atomic copies/downloads preserve completed work on retry, and a process
+lock serializes preparation. Corrupt existing files are reported and retained
+for inspection. The storage policy permits 37 GB total under `data/`, with
+19 GB for static sources. Preparation never starts model training.
+
+Failed optional preparation retains the coarse model and reports capability
+errors through `/api/config` and the interface. Fix the source and restart to
+retry. Set `WILDFIRE_PREPARE_DATA=0` to use directly configured sources without
+preparation, or `WILDFIRE_DOWNLOAD_VEGETATION=0` to permit imports but prohibit
+public downloads. Explicit provider/model injection remains isolated from
+automatic preparation unless settings enable it.
+
+## Restored controls and measurements
+
+Choose **Polygon spread · roads & fuel** in Simulation for expanding 30 m
+fuel-patch playback, or an Edson/Boulder polygon entry for a fixed pilot.
+Place a fire in supported vegetation, then use the usual step/playback controls.
+Roads and active/burned polygons appear on the map. Limits remain 24 tiles,
+500 seeds and 96 simulated hours. Known road surface classes with missing widths
+use the configured 6 m assumption; unknown surfaces remain unsupported. This is
+an uncalibrated scenario with constant wind.
+
+The cell inspector reports land cover and quality-supported canopy measurements.
+The tested Edson cell has needleleaf forest and effectively 100% mapped vegetated
+land, but only about 9.6% usable canopy coverage, below the 25% threshold. Boulder
+and Toronto test cells returned canopy density around 57.2% and 70.5%.
+Unavailable measurements remain distinct from zero vegetation.
+
+## Verification
+
+The **116-test Python suite** covers integrity, atomic import, repeat startup,
+download failure and capture times, portable canopy loading, road barriers,
+tile seams, polygon replay, vegetation quality and API behavior. Download
+transport used fixtures; the real restoration reused archives without downloads.
+
+Real API checks passed vegetation inspection, fixed Edson polygons and expanding
+polygons. The expanding scenario grew from one tile to two at 12 hours, with
+36 initial road features. Replay returned identical frames. Fixed and expanding
+fire polygons had **0 m² overlap** with mapped road surfaces under the configured
+width policy. Warm preparation succeeded without the source repo or network.
+
+Real-data Chromium checks passed the canopy/land-cover inspector, polygon
+rendering, tile expansion, saved-frame replay and 390 px layout without browser
+errors. Repeat against the running app:
+
+```bash
+python tests/web/browser_restored_landscape.py http://127.0.0.1:8000
+```
+
+Install Playwright/Chromium as described in [verification](verification.md).
+Local reports/screenshots are under `artifacts/restored-landscape/`.
+Source data and models remain excluded from Git; syncing code does not transfer
+the 17 GB runtime archive.

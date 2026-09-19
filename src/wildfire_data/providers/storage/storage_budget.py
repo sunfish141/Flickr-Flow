@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import Mapping
 
 
-DEFAULT_POLICY_PATH = Path("config/storage_budget.json")
+from wildfire_data.core.paths import REPOSITORY_ROOT
+
+DEFAULT_POLICY_PATH = REPOSITORY_ROOT / "config/storage_budget.json"
 
 
 class StorageBudgetError(RuntimeError):

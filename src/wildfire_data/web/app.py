@@ -22,7 +22,10 @@ def create_app(*, settings=None, model=None, terrain_provider=None, firms_loader
                landscape=None, vegetation_sampler=None, allowed_hosts=None,
                historical_store=None, local_config=None):
     load_defaults = settings is not None or model is None or local_config is not None
+    injected_defaults = settings is None and model is not None
     settings = settings or Settings.from_environment()
+    if injected_defaults:
+        settings = replace(settings, prepare_data=False)
     if local_config is not None:
         settings = replace(settings, local_config=Path(local_config))
     runtime = Runtime(settings, model=model, terrain_provider=terrain_provider,
