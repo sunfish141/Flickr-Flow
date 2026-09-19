@@ -117,7 +117,17 @@ class LocalSpreadModel:
             tile_ids, cover_ids = sampler.cover_tree.query(tiles, predicate='intersects')
             vegetated = np.array([p['fuel'] in VEGETATED for _, p in sampler.cover], dtype=bool)
             tile_ids, cover_ids = tile_ids[vegetated[cover_ids]], cover_ids[vegetated[cover_ids]]
-            pieces = shapely.difference(shapely.intersection(sampler.cover_tree.geometries[cover_ids], tiles[tile_ids]), road_masks[tile_ids])
+            # Most small mesh squares lie wholly inside one large cover polygon.
+            # Prepared containment avoids repeatedly intersecting that polygon's
+            # entire detailed boundary; boundary squares retain exact clipping.
+            shapely.prepare(sampler.cover_tree.geometries)
+            cover = sampler.cover_tree.geometries[cover_ids]
+            # Keep the original clipping order for road-cut squares: GEOS part
+            # ordering there determines stable patch identifiers.
+            inside = shapely.covers(cover, tiles[tile_ids]) & shapely.is_empty(road_masks[tile_ids])
+            clipped = tiles[tile_ids].copy()
+            clipped[~inside] = shapely.intersection(cover[~inside], clipped[~inside])
+            pieces = shapely.difference(clipped, road_masks[tile_ids])
             parts, owners = shapely.get_parts(pieces, return_index=True)
             while np.any(shapely.get_type_id(parts) > 3):
                 parts, indices = shapely.get_parts(parts, return_index=True)
@@ -149,6 +159,14 @@ class LocalSpreadModel:
     def _runtime(self):
         durations = self.policy.residence_minutes_by_fuel
         self.residence = [durations[p.fuel] if durations else self.policy.residence_minutes for p in self.patches]
+        # Immutable numeric geometry belongs to the prepared graph, not to each
+        # edge traversal or displayed frame. Keep Python floats in the hot loop.
+        self.center_xy = shapely.get_coordinates(self.centers).tolist()
+        self.patch_areas = shapely.area(self.tree.geometries).tolist()
+        boundary = self.sampler.bounds.boundary
+        self.boundary_distances = shapely.distance(self.tree.geometries, boundary)
+        self.boundary_ids = np.flatnonzero(self.boundary_distances < 1e-6).tolist()
+        self.perimeter_cells = {}
         sampler, policy = self.sampler, self.policy
         lon, lat = sampler.to_geo.transform(*sampler.bounds.centroid.coords[0])
         self.wind = projected_wind(sampler.to_grid, (lat, lon), policy.wind_east_m_s, policy.wind_north_m_s)
@@ -261,8 +279,9 @@ class LocalSpreadModel:
         return tuple(sorted(ids))
 
     def _projection(self, i, j):
-        a, b = self.centers[i], self.centers[j]
-        dx, dy = b.x-a.x, b.y-a.y
+        ax, ay = self.center_xy[i]
+        bx, by = self.center_xy[j]
+        dx, dy = bx-ax, by-ay
         return (self.wind[0]*dx+self.wind[1]*dy)/max(math.hypot(dx, dy), 1e-9)
 
     def arrivals(self, seeds, until=math.inf):
@@ -332,25 +351,35 @@ class LocalSpreadModel:
 
     def frame_from_arrivals(self, times, elapsed_minutes):
         """Render supplied arrival times using the same geometry/fuel contract."""
-        active, burned, cells = [], [], {}
-        boundary_reached = False
+        active, burned, cells = {}, {}, {}
+        active_count = burned_count = 0
+        boundary_reached = any(times.get(i, math.inf) <= elapsed_minutes for i in self.boundary_ids)
         for i, arrival in times.items():
             if arrival > elapsed_minutes:
                 continue
             patch = self.patches[i]
             remaining = max(0., 1-(elapsed_minutes-arrival)/self.residence[i])
-            (active if remaining > 0 else burned).append(patch.geometry)
+            (active if remaining > 0 else burned).setdefault(patch.cell_id, []).append(i)
+            active_count += remaining > 0
+            burned_count += remaining <= 0
             record = cells.setdefault(patch.cell_id, {'active_area_m2': 0., 'burned_area_m2': 0.})
-            record['active_area_m2' if remaining > 0 else 'burned_area_m2'] += patch.geometry.area
-            boundary_reached |= patch.geometry.distance(self.sampler.bounds.boundary) < 1e-6
+            record['active_area_m2' if remaining > 0 else 'burned_area_m2'] += self.patch_areas[i]
         features = []
-        for status, geometries in (('active', active), ('burned', burned)):
-            if geometries:
+        for status, groups in (('active', active), ('burned', burned)):
+            if groups:
+                geometries = []
+                for cell_id, ids in sorted(groups.items()):
+                    key, signature = (cell_id, status), tuple(sorted(ids))
+                    cached = self.perimeter_cells.get(key)
+                    if cached is None or cached[0] != signature:
+                        cached = (signature, unary_union(self.tree.geometries[list(signature)]))
+                        self.perimeter_cells[key] = cached
+                    geometries.append(cached[1])
                 geometry = unary_union(geometries)
                 features.append({'type': 'Feature', 'geometry': mapping(transform(self.sampler.to_geo.transform, geometry)),
                     'properties': {'status': status, 'area_m2': geometry.area, 'basis': 'scenario simulation'}})
         return {'perimeters': {'type': 'FeatureCollection', 'features': features},
-            'cells': cells, 'active_patch_count': len(active), 'burned_patch_count': len(burned),
+            'cells': cells, 'active_patch_count': active_count, 'burned_patch_count': burned_count,
             'boundary_reached': boundary_reached, 'elapsed_minutes': elapsed_minutes,
             'future_arrivals': any(t > elapsed_minutes for t in times.values()),
             'assumptions': {'kind': 'uncalibrated scenario', 'policy': asdict(self.policy),

@@ -231,25 +231,26 @@ class ExpandingScenarios:
                 model.clear_arrivals()
             seeds = model.seed_ids(coordinates)
             search = self.hybrid.search(model, seeds, origin, snapshot) if snapshot else None
-            frame = search.frame(step*720) if search else model.frame(seeds, step*720)
+            until = step*720
+            arrivals = search.advance(until) if search else model.arrivals(seeds, until=until)
             keys = set()
             reach = self.local.policy.max_spotting_distance_m if self.local.policy.spotting_distance_per_wind_m_s else 0
-            if frame['boundary_reached'] or reach:
-                arrivals = search.times if search else model.arrivals(seeds, until=step*720)
-                for i, arrival in arrivals.items():
-                    if arrival > step*720:
-                        continue
-                    g = model.patches[i].geometry
-                    if g.distance(model.sampler.bounds.boundary) > reach + 1e-6:
-                        continue
-                    key = tile_key(*model.centers[i].coords[0])
-                    for dx, dy in ((-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)):
-                        other = (key[0]+dx,key[1]+dy)
-                        if other not in samplers and g.distance(box(*tile_bounds(other))) <= reach + 1e-6:
-                            keys.add(other)
+            boundary_ids = (model.boundary_distances <= reach+1e-6).nonzero()[0] if reach else model.boundary_ids
+            for i in boundary_ids:
+                if arrivals.get(i, math.inf) > until:
+                    continue
+                g = model.patches[i].geometry
+                key = tile_key(*model.center_xy[i])
+                for dx, dy in ((-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)):
+                    other = (key[0]+dx,key[1]+dy)
+                    if other not in samplers and other not in keys and g.distance(box(*tile_bounds(other))) <= reach + 1e-6:
+                        keys.add(other)
             if not keys:
                 break
             self.load(keys, samplers)
+        # Expansion may need several graph passes. Only the final graph needs
+        # its perimeter dissolved, transformed and serialized for the browser.
+        frame = search.frame(until) if search else model.frame_from_arrivals(arrivals, until)
         result = self.local.response('auto', model, seeds, step, origin, frame=frame)
         ignition_dicts = [{'longitude': lon, 'latitude': lat} for lon, lat in sorted(set(coordinates))]
         profile = self.scenario_profile(snapshot)

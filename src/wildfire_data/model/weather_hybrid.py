@@ -135,8 +135,9 @@ class HybridSearch:
                 target_rate = self.model.policy.rates_m_min[target.fuel]
                 if min(source_rate, target_rate) <= 0:
                     continue
-                a,b = self.model.centers[i],self.model.centers[j]
-                dx,dy = b.x-a.x,b.y-a.y
+                ax,ay = self.model.center_xy[i]
+                bx,by = self.model.center_xy[j]
+                dx,dy = bx-ax,by-ay
                 along = (self.wind[0]*dx+self.wind[1]*dy)/max(math.hypot(dx,dy),1e-9)
                 response = math.exp(max(-3.,min(3.,self.model.policy.wind_coefficient*along)))
                 departure = first/(source_rate*response)

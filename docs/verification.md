@@ -281,3 +281,52 @@ python tests/web/browser_live_firms.py http://127.0.0.1:8001 \
 Those example coordinates were used for the September 19 check. Choose another
 current detection area if they are now empty. The live test requires a valid
 server credential and provider connectivity; it is separate from fixture tests.
+
+## Large polygon performance
+
+The September 19 optimization keeps the same travel policy, weather ML
+probabilities, mesh, road/water barriers and fuel clocks. It addresses large
+standard and hybrid scenarios by caching numeric geometry and cell perimeter
+unions, checking only boundary patches for expansion, rendering after expansion
+finishes, and avoiding exact cover intersections for wholly contained squares
+without roads. Graph expansion still recomputes arrival searches over the larger
+domain so newly available routes remain correct.
+
+The benchmark uses real Alberta cover/roads around the Edson example, the trained
+weather blend, a pinned forecast, and nine fixed starting cells mapped through
+the same representative-patch path as FIRMS. These are repeatable test ignitions,
+not a claim about current satellite observations. At 125 burned 1 km cells the
+engine has already burned 99,799 native patches. Profiling confirms geometry,
+perimeter construction and expansion dominate, rather than classifier scoring.
+
+The controlled comparison runs the original and optimized implementations in
+separate sequential processes with four OpenMP/OpenBLAS threads. It primes the
+132-hour frame and measures the next six 12-hour steps without cProfile. Both
+versions use the same retained tile files and weather; startup, NASA fetching
+and HTTP serialization are excluded. These local timings are not latency
+guarantees for new locations or different machines.
+
+| Elapsed | Burned cells | Tiles | Before | After |
+| --- | ---: | ---: | ---: | ---: |
+| 144 h | 125 | 24 | 23.62 s | 16.01 s |
+| 156 h | 134 | 26 | 28.89 s | 16.55 s |
+| 168 h | 139 | 27 | 28.76 s | 13.30 s |
+| 180 h | 151 | 29 | 35.17 s | 15.34 s |
+| 192 h | 157 | 30 | 33.83 s | 16.22 s |
+| 204 h | 162 | 30 | 8.25 s | 1.71 s |
+
+The first five steps expand the graph; the last reuses the loaded domain.
+First-time source collection remains additional work. Earlier cProfile runs
+also included different source-cache states, so these sequential unprofiled
+measurements are the performance comparison, rather than the initial traces.
+
+Correctness checks include exact patch IDs, adjacency and arrival times on two
+real Alberta and two real Colorado tiles. Large hybrid frames retain identical
+cell predictions and state; geographic perimeter symmetric difference is zero,
+with less than 0.000001 m² of area rounding from regrouping unions. Regression tests
+cover rewinding, changing ignitions, holes, road cuts, containment and a single
+render per expansion. Existing saved Alberta/Colorado browser scenarios also
+restore on the restarted HTTP server and replay exactly after advancing.
+
+**185 Python tests and 14 frontend tests pass.** Local benchmark reports are
+retained under `artifacts/landscape-performance/large-polygon/`.

@@ -82,6 +82,18 @@ class ExpandingTests(unittest.TestCase):
         self.assertEqual(len(advanced['state']['tiles']),1)
         self.assertNotIn((1,0),self.store.loaded)
 
+    def test_expansion_renders_only_the_final_landscape(self):
+        seed = self.seed()
+        renders = []
+        original = LocalSpreadModel.frame_from_arrivals
+        def render(model, *args):
+            renders.append(model.identity)
+            return original(model,*args)
+        with patch.object(LocalSpreadModel,'frame_from_arrivals',render):
+            advanced = self.step(seed)
+        self.assertGreater(len(advanced['state']['tiles']),len(seed['state']['tiles']))
+        self.assertEqual(len(renders),1)
+
     def test_missing_tile_is_failure_not_invisible_barrier(self):
         seed = self.seed()
         self.store.fail = True

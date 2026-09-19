@@ -208,3 +208,57 @@ class LocalSpreadTests(unittest.TestCase):
         self.assertEqual(joined.adjacency,first.adjacency)
         with self.assertRaisesRegex(ValueError,'policy or mesh'):
             LocalSpreadModel.join(LandscapeMosaic([a,b]),policy(unknown_road_width_m=4),[first,empty])
+
+    def test_cached_perimeters_match_patch_union_after_advance_rewind_and_new_seed(self):
+        # Road cuts, holes and a 1 km seam exercise all parts of the grouped union.
+        land = box(0,0,2100,120).difference(box(990,30,1050,90))
+        sampler = bundle(self.temp.name, bounds=(0,0,2100,120), cover=[(land,'grassland')],
+                         roads=[(LineString([(1515,0),(1515,80)]),{})])
+        model = LocalSpreadModel(sampler, policy())
+        for seed, minute in [(0,720),(0,1440),(0,720),(len(model.patches)-1,720),(0,1440)]:
+            times = model.arrivals((seed,), until=minute)
+            frame = model.frame((seed,), minute)
+            for status in ('active','burned'):
+                expected = unary_union([model.patches[i].geometry for i,t in times.items()
+                    if t <= minute and ('active' if minute-t < model.residence[i] else 'burned') == status])
+                from shapely.ops import transform
+                expected = transform(model.sampler.to_geo.transform, expected)
+                actual = unary_union([shape(f['geometry']) for f in frame['perimeters']['features']
+                                      if f['properties']['status'] == status])
+                self.assertLess(actual.symmetric_difference(expected).area,1e-12)
+            boundary = any(model.patches[i].geometry.distance(model.sampler.bounds.boundary)<1e-6
+                           for i,t in times.items() if t <= minute)
+            self.assertEqual(frame['boundary_reached'],boundary)
+
+    def test_finished_cells_do_not_redissolve_all_patches_each_step(self):
+        from unittest.mock import patch
+        model = self.model(bounds=(0,0,2100,120))
+        model.frame((0,),10000)
+        with patch('wildfire_data.model.local_spread.unary_union', wraps=unary_union) as merge:
+            later = model.frame((0,),11000)
+        # Only the already dissolved cell polygons are joined for display.
+        self.assertLessEqual(sum(len(call.args[0]) for call in merge.call_args_list),3)
+        self.assertEqual(later['burned_patch_count'],len(model.patches))
+
+    def test_containment_fast_path_preserves_road_cut_patch_ids_and_edges(self):
+        from unittest.mock import patch
+        import numpy as np
+        import shapely
+        land = box(0,0,2100,120).difference(box(975,30,1035,90))
+        sampler = bundle(self.temp.name, bounds=(0,0,2100,120), cover=[(land,'grassland')],
+                         roads=[(LineString([(45,0),(45,90)]),{}),
+                                (LineString([(985,0),(1025,120)]),{})])
+        optimized = LocalSpreadModel(sampler,policy())
+        is_empty = shapely.is_empty
+        # Force the exact-intersection path for the comparison graph.
+        def no_shortcut(geometry, *args, **kwargs):
+            if isinstance(geometry,np.ndarray):
+                return np.zeros(len(geometry),dtype=bool)
+            return is_empty(geometry,*args,**kwargs)
+        with patch('wildfire_data.model.local_spread.shapely.is_empty',no_shortcut):
+            reference = LocalSpreadModel(sampler,policy())
+        self.assertEqual(len(optimized.patches),len(reference.patches))
+        self.assertTrue(all(a.geometry.equals(b.geometry) and a.cell_id==b.cell_id and a.fuel==b.fuel
+                            for a,b in zip(optimized.patches,reference.patches)))
+        self.assertEqual(optimized.adjacency,reference.adjacency)
+        self.assertEqual(optimized.arrivals((0,)),reference.arrivals((0,)))

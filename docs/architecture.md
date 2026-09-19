@@ -39,6 +39,22 @@ road-cut geometry and internal adjacency. Expansion reuses those graphs and
 constructs only the gates across tile boundaries. Vectorized GEOS operations
 preserve polygon geometry, holes, road cuts and shared-gate rules.
 
+Prepared graphs also retain numeric patch centers, areas and distances to the
+current evidence boundary. Both polygon engines traverse numeric coordinates;
+expansion examines boundary patches instead of every previously burned patch.
+Expansion finishes its graph passes before rendering one final perimeter.
+Perimeter rendering caches the latest active and burned union for each 1 km
+cell, keyed by the exact set of patch IDs. Completed cells reuse their shapes;
+rewind and other ignition sets replace a cache entry when its membership changes.
+The cache has at most two entries per cell in its owning bounded model cache.
+Cell grouping changes polygon coordinate ordering and floating-point area
+roundoff, without simplifying geometry or changing spread probabilities.
+
+Graph construction uses prepared containment for vegetation squares without
+road cuts. Fully contained squares need no polygon intersection. Cover edges,
+holes and all road-cut squares retain exact clipping, including stable patch
+IDs. These optimizations preserve model/profile identities and existing states.
+
 Before readiness, `expanding.prewarm_tiles` prepares regional example locations
 and recently generated native tiles, up to 24 by default. Set it to zero to
 disable warmup. This moves graph construction into startup for retained areas;
