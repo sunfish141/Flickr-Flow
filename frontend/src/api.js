@@ -39,5 +39,10 @@ export async function api(path, body, signal, { onRetry } = {}) {
     }
     throw error;
   }
+  // Static assets update immediately after a checkout, but an already running
+  // Python server can still return the old point-only grid contract.
+  if (!data.local && Array.isArray(data.points) && data.points.some(point => point.status !== 'historical' && !point.geometry)) {
+    throw new Error('Fire geometry is missing from the server response. Restart the server after updating the app, then reload this page.');
+  }
   return data;
 }

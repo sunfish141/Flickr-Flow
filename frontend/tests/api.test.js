@@ -31,6 +31,28 @@ test('unreadable responses are explained but interrupted response bodies stay ca
   await assert.rejects(api('/api/step', {}), { name: 'AbortError' });
 });
 
+test('older server responses cannot silently hide active or burned grid fires', async t => {
+  for (const status of ['active', 'burned', 'candidate']) {
+    t.mock.method(globalThis, 'fetch', async () => Response.json({
+      points: [{ cell_id: 'naea-1km:x=-346:y=812', latitude: 46.8, longitude: -100.8, status }],
+    }));
+    await assert.rejects(api('/api/step', {}), /Restart the server.*reload this page/);
+  }
+});
+
+test('grid footprints, local perimeters, and observation markers remain supported', async t => {
+  const geometry = { type: 'Polygon', coordinates: [[[-101, 47], [-100, 47], [-100, 48], [-101, 47]]] };
+  for (const frame of [
+    { points: ['active', 'burned', 'candidate'].map(status => ({ status, geometry })) },
+    { local: true, points: [{ status: 'active' }, { status: 'burned' }], perimeters: { type: 'FeatureCollection', features: [] } },
+    { points: [{ status: 'historical' }] },
+    { points: [] },
+  ]) {
+    t.mock.method(globalThis, 'fetch', async () => Response.json(frame));
+    assert.deepEqual(await api('/api/step', {}), frame);
+  }
+});
+
 test('busy preparation retries the same request and does not retry permanent failures', async t => {
   const calls = [], waiting = [];
   t.mock.method(globalThis, 'fetch', async (...args) => {

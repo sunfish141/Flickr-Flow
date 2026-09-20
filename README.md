@@ -54,6 +54,13 @@ needs trusted model artifacts: use the training commands below with the supplied
 CSV release. The server can serve the interface without a model, but reports
 the model unavailable and disables coarse simulation until configured.
 
+After pulling, rebasing, or resetting the checkout, restart the API and reload
+the page. A running Python process keeps its imported code while serving the
+updated frontend files; an older API can return fire counts without the polygon
+geometry the current map needs. For automatic Python reloads during development,
+add `--reload --reload-dir src` to the uvicorn command above. Rebuild the frontend
+after editing its source.
+
 ## Local resources
 
 With `data/planning-packs-v1/index.json` installed, the web app defaults to
