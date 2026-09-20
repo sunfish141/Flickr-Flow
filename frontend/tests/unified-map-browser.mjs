@@ -21,6 +21,11 @@ try {
   const explorer = page.frameLocator('#explorer');
   await explorer.locator('#map[data-overview=ready]').waitFor();
   const config = await (await page.request.get(`${base}/api/config`)).json();
+  if (config.local_spread.regions.some(r => r.tiled)) {
+    await explorer.locator('#map[data-regional-map=ready]').waitFor();
+    assert.equal(await explorer.locator('.leaflet-regionalMaps-pane img').evaluateAll(images =>
+      images.length > 0 && images.every(image => image.complete && image.naturalWidth === 256)), true);
+  }
   assert.equal(await page.locator('#planner,#planning-tab,#network-toggle').count(), 0);
   assert.equal(await explorer.locator('#local-region,#intensity').count(), 0);
   assert.equal(await explorer.locator('.installed-boundary').count(), 2);
@@ -33,32 +38,43 @@ try {
   await explorer.locator('.coordinates summary').click();
   const regionReports = [];
   for (const region of config.local_spread.regions) {
+    const seedPath = region.tiled ? '/api/landscape/seed' : '/api/map/seed';
+    const stepPath = region.tiled ? '/api/landscape/step' : '/api/local/step';
+    const layersResponse = await page.request.get(`${base}${region.tiled ? region.map_tiles.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0') : `/api/local/regions/${region.id}/layers`}`);
+    assert.equal(layersResponse.status(), 200, 'Installed map layers must load offline');
+    const localLayers = region.tiled ? null : await layersResponse.json();
+    if (localLayers) {
+      assert.equal(localLayers.id, region.id);
+      assert.ok(localLayers.layers.cover.features.length, 'Bundled land cover must not be empty');
+      assert.ok(localLayers.layers.roads.features.length, 'Bundled roads must not be empty');
+    }
     await explorer.locator(`#installed-regions button[data-region="${region.id}"]`).click();
     if (await explorer.locator('#reset').isEnabled()) await explorer.locator('#reset').click();
     await explorer.locator('#latitude').fill(String(region.example_ignition.latitude));
     await explorer.locator('#longitude').fill(String(region.example_ignition.longitude));
-    const seeded = page.waitForResponse(r => r.url().endsWith('/api/map/seed'));
+    const seeded = page.waitForResponse(r => r.url().endsWith(seedPath));
     await explorer.locator('#coordinate-place').click();
     const seedResponse = await seeded, seed = await seedResponse.json();
     assert.equal(seedResponse.status(), 200, JSON.stringify(seed));
-    assert.equal(seed.state.region, region.id);
+    assert.equal(seed.region_id || seed.state.region, region.id);
     assert.ok(seed.perimeters.features.length);
     await explorer.locator('#status').waitFor({ state: 'hidden' });
-    assert.ok(!Object.hasOwn(posts.findLast(p => p.path === '/api/map/seed').body, 'region'));
+    assert.ok(!Object.hasOwn(posts.findLast(p => p.path === seedPath).body, 'region'));
     // Coordinate placement centres the map at a known supported fuel patch.
     // Reset without navigating, then exercise the real Leaflet click path too.
     await explorer.locator('#reset').click();
     await explorer.locator('#status').waitFor({ state: 'hidden' });
     await explorer.locator('#place').click();
     assert.equal(await explorer.locator('#map').evaluate(map => map.classList.contains('leaflet-container')), true, 'Placement must preserve Leaflet layout classes');
-    const clickedSeed = page.waitForResponse(r => r.url().endsWith('/api/map/seed'));
+    const clickedSeed = page.waitForResponse(r => r.url().endsWith(seedPath));
     const mapBox = await explorer.locator('#map').boundingBox();
     await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
     const clickedResponse = await clickedSeed;
     assert.equal(clickedResponse.status(), 200, await clickedResponse.text());
-    assert.equal((await clickedResponse.json()).state.region, region.id);
+    const clicked = await clickedResponse.json();
+    assert.equal(clicked.region_id || clicked.state.region, region.id);
     await explorer.locator('#place').click();
-    const stepped = page.waitForResponse(r => r.url().endsWith('/api/local/step'));
+    const stepped = page.waitForResponse(r => r.url().endsWith(stepPath));
     await explorer.locator('#step').click();
     const stepResponse = await stepped, step = await stepResponse.json();
     assert.equal(stepResponse.status(), 200);
@@ -88,7 +104,8 @@ try {
     const other = config.local_spread.regions.find(r => r.id !== region.id);
     await explorer.locator(`#installed-regions button[data-region="${other.id}"]`).click();
     assert.equal(await explorer.locator('#elapsed').innerText(), '+12 hours', 'Browsing another region must not reset the simulation');
-    regionReports.push({ region: region.id, elapsed_hours: step.elapsed_hours, polygonFeatures: step.perimeters.features.length, map_click: true });
+    regionReports.push({ region: region.id, elapsed_hours: step.elapsed_hours, polygonFeatures: step.perimeters.features.length, map_click: true,
+      offline_map_tiles: !!region.tiled, offline_cover_features: localLayers?.layers.cover.features.length, offline_road_features: localLayers?.layers.roads.features.length });
   }
   await explorer.locator('#reset').click();
   await explorer.locator('#latitude').fill('40.7'); await explorer.locator('#longitude').fill('-74');
@@ -149,8 +166,8 @@ try {
   // This is the reported regression: connected placement outside either pack
   // must reach the existing model, and must disclose its coarser resolution.
   await auto.locator('.coordinates summary').click();
-  await auto.locator('#latitude').fill('58.947698');
-  await auto.locator('#longitude').fill('-113.623403');
+  await auto.locator('#latitude').fill('46.8');
+  await auto.locator('#longitude').fill('-100.8');
   const coarseSeeded = auto.waitForResponse(r => r.url().endsWith('/api/seed'));
   await auto.locator('#coordinate-place').click();
   const coarseResponse = await coarseSeeded, coarse = await coarseResponse.json();
@@ -177,8 +194,8 @@ try {
   await auto.locator('#coordinate-place').click();
   await auto.locator('#status.error').filter({ hasText: 'Reset before starting here' }).waitFor();
   assert.equal(await auto.locator('#map').getAttribute('data-simulation'), 'reference-grid');
-  await auto.locator('#latitude').fill('58.947698');
-  await auto.locator('#longitude').fill('-113.623403');
+  await auto.locator('#latitude').fill('46.8');
+  await auto.locator('#longitude').fill('-100.8');
   const coarseStepped = auto.waitForResponse(r => r.url().endsWith('/api/step'));
   await auto.locator('#step').click();
   const stepResponse = await coarseStepped, coarseStep = await stepResponse.json();
@@ -199,7 +216,7 @@ try {
   await auto.evaluate(() => { Object.defineProperty(navigator, 'onLine', { get: () => true, configurable: true }); window.dispatchEvent(new Event('online')); });
   // Previously decoded tiles may still be usable. A different view needs new
   // tiles and exercises provider failure rather than browser memory caching.
-  await auto.locator('#installed-regions button[data-region="black-hawk-colorado"]').click();
+  await auto.locator(`#installed-regions button[data-region="${config.local_spread.regions[0].id}"]`).click();
   await auto.locator('#map[data-connection=unavailable]').waitFor();
   assert.ok(tileRequests > initialRequests);
   assert.equal(await auto.locator('.installed-boundary').count(), 2);
@@ -207,10 +224,11 @@ try {
   await auto.clock.fastForward(31000);
   await auto.locator('#map[data-connection=online]').waitFor();
   await auto.locator('#latitude').fill('55.3');
-  await auto.locator('#longitude').fill('-115');
+  await auto.locator('#longitude').fill('-105');
   const missingTerrainSeed = auto.waitForResponse(r => r.url().endsWith('/api/seed'));
   await auto.locator('#coordinate-place').click();
-  assert.equal((await missingTerrainSeed).status(), 200);
+  const missingResponse = await missingTerrainSeed;
+  assert.equal(missingResponse.status(), 200, await missingResponse.text());
   await auto.locator('#coarse-limitations').filter({ hasText: 'Terrain missing' }).waitFor();
   await auto.locator('#status').waitFor({ state: 'hidden' });
   assert.equal(await auto.locator('#status').innerText(), '');

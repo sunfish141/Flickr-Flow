@@ -20,6 +20,14 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
     L.control.zoom({ position: 'topright' }).addTo(map);
     const cellRenderer = L.svg({ padding: .2 });
     map.createPane('offlineOverview'); map.getPane('offlineOverview').style.zIndex = '190';
+    map.createPane('regionalMaps'); map.getPane('regionalMaps').style.zIndex = '195';
+    const regionalMaps = new Map();
+    const failedRegionalMaps = new Set();
+    function regionalMapState() {
+      const active = [...regionalMaps.values()].filter(layer => map.hasLayer(layer));
+      container.current.dataset.regionalMap = active.some(layer => failedRegionalMaps.has(layer)) ? 'error'
+        : active.some(layer => layer.isLoading()) ? 'loading' : active.length ? 'ready' : 'hidden';
+    }
     const coverageRenderer = L.svg();
     const overview = L.layerGroup().addTo(map);
     const layers = { reference: L.layerGroup().addTo(map), coverage: L.layerGroup().addTo(map), roads: L.layerGroup().addTo(map), burned: L.layerGroup().addTo(map), active: L.layerGroup().addTo(map), candidate: L.layerGroup().addTo(map), cells: L.layerGroup().addTo(map), selection: L.layerGroup().addTo(map), historical: L.layerGroup().addTo(map) };
@@ -69,6 +77,28 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
     function draw() {
       Object.values(layers).forEach(layer => layer.clearLayers());
       const { region, frame, visibility, selectedCell } = latest.current;
+      for (const installed of latest.current.regions || []) {
+        if (!installed.map_tiles) continue;
+        if (!regionalMaps.has(installed.id)) {
+          const [w, s, e, n] = installed.bounds;
+          const layer = L.tileLayer(installed.map_tiles, {
+            pane: 'regionalMaps', bounds: [[s, w], [n, e]], minZoom: 2, maxZoom: 16,
+            keepBuffer: 1, updateWhenIdle: true, attribution: 'NALCMS · Overture Maps contributors',
+          });
+          layer.on('loading', () => { failedRegionalMaps.delete(layer); regionalMapState(); });
+          layer.on('load', regionalMapState);
+          layer.on('tileerror', () => {
+            if (healthy || !map.hasLayer(layer)) return;
+            failedRegionalMaps.add(layer); regionalMapState();
+            latest.current.onError('A local map tile could not be loaded. Try zooming again; if it persists, check the installed regional data.');
+          });
+          regionalMaps.set(installed.id, layer);
+        }
+        const layer = regionalMaps.get(installed.id);
+        if (!healthy && !map.hasLayer(layer)) layer.addTo(map);
+        else if (healthy && map.hasLayer(layer)) layer.remove();
+      }
+      regionalMapState();
       if (!healthy) {
         const colors = { water: '#96c8dd', urban: '#b08baa', unknown: '#b08baa', barren: '#c7bfb3', snow_ice: '#e1eaed',
           needleleaf: '#51745c', broadleaf: '#70935b', mixed_forest: '#64816b', shrubland: '#a7b481', grassland: '#c3cd97', wetland: '#83aea6', cropland: '#d8cf96' };
@@ -79,7 +109,7 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
       }
       for (const installed of latest.current.regions || []) {
         L.geoJSON(installed.coverage, { interactive: false, renderer: coverageRenderer,
-          style: { className: 'installed-boundary', color: '#21627f', weight: installed.id === frame?.state.region ? 3 : 2, dashArray: '6 4', fill: false } }).addTo(layers.coverage);
+          style: { className: 'installed-boundary', color: '#21627f', weight: installed.id === (frame?.region_id || frame?.state.region) ? 3 : 2, dashArray: '6 4', fill: false } }).addTo(layers.coverage);
         const [west, south, east, north] = installed.bounds;
         const label = document.createElement('button');
         label.type = 'button'; label.textContent = shortRegionName(installed);

@@ -7,6 +7,7 @@ from starlette.responses import JSONResponse
 
 MAX_REQUEST_BYTES = 8 * 1024 * 1024
 MAX_INFLIGHT_REQUESTS = 8
+MAX_INFLIGHT_MAP_REQUESTS = 16
 SECURITY_HEADERS = {
     'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; "
@@ -29,6 +30,7 @@ class RequestBoundary:
     def __init__(self, app):
         self.app = app
         self.inflight = 0
+        self.inflight_maps = 0
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
@@ -62,7 +64,12 @@ class RequestBoundary:
                 return await reject(403, 'Cross-origin API requests are not allowed.')
         if headers.get(b'sec-fetch-site') == b'cross-site':
             return await reject(403, 'Cross-site API requests are not allowed.')
-        if self.inflight >= MAX_INFLIGHT_REQUESTS:
+        # Local raster tiles must not consume every simulation/config slot.
+        # Both pools remain bounded; origin and body checks still apply.
+        map_request = scope['method'] == 'GET' and path.startswith('/api/regional/') and '/tiles/' in path and path.endswith('.png')
+        counter = 'inflight_maps' if map_request else 'inflight'
+        ceiling = MAX_INFLIGHT_MAP_REQUESTS if map_request else MAX_INFLIGHT_REQUESTS
+        if getattr(self, counter) >= ceiling:
             return await reject(503, 'Server busy. Try again shortly.', {'Retry-After': '3'})
         if b'content-length' in headers:
             try:
@@ -73,7 +80,7 @@ class RequestBoundary:
                 return await reject(400, 'Invalid Content-Length.')
             if length > MAX_REQUEST_BYTES:
                 return await reject(413, 'Request exceeds the 8 MiB preview limit.')
-        self.inflight += 1
+        setattr(self, counter, getattr(self, counter) + 1)
         try:
             body = bytearray()
 
@@ -109,4 +116,4 @@ class RequestBoundary:
 
             await self.app(scope, replay, secured_send)
         finally:
-            self.inflight -= 1
+            setattr(self, counter, getattr(self, counter) - 1)

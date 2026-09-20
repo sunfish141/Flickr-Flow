@@ -39,6 +39,10 @@ jobs:
         env:
           DESKTOP_MODEL_URL: ${{ vars.DESKTOP_MODEL_URL }}
           DESKTOP_MODEL_SHA256: ${{ vars.DESKTOP_MODEL_SHA256 }}
+      - run: python scripts/obtain_regional_build_input.py
+        env:
+          DESKTOP_REGIONS_URL: ${{ vars.DESKTOP_REGIONS_URL }}
+          DESKTOP_REGIONS_SHA256: ${{ vars.DESKTOP_REGIONS_SHA256 }}
       - run: python scripts/build_desktop.py
       - run: node node_modules/playwright-core/cli.js install chromium
         working-directory: frontend

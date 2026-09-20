@@ -42,3 +42,13 @@ test('satellite views use packs only for close-up views centred inside them', ()
   assert.equal(regionForView(regions, { west: -10, east: 12, south: -10, north: 12 }), null);
   assert.equal(regionForView(regions, { west: 3, east: 4, south: 3, north: 4 }), null);
 });
+
+test('full-region coverage routes offline to bounded landscape tiles without mixing regions', () => {
+  const region = { id: 'alberta', tiled: true, coverage: { geometry }, bounds: [0,0,2,2] };
+  const frame = { local: true, expanding: true, region_id: 'alberta', state: {} };
+  assert.equal(placementRoute({ region, online: false, modelReady: false }).endpoint, 'landscape/seed');
+  assert.equal(placementRoute({ region, frame, online: false }).endpoint, 'landscape/seed');
+  assert.match(placementRoute({ region: { ...region, id: 'colorado' }, frame, online: true }).error, /Reset/);
+  assert.equal(regionForView([region], { west: 0, south: 0, east: 2, north: 2 }), null);
+  assert.equal(regionForView([region], { west: .9, south: .9, east: 1.1, north: 1.1 }).id, 'alberta');
+});

@@ -88,7 +88,7 @@ class ExpandingStep(Input):
 
 
 class ExpandingScenarios:
-    def __init__(self, config, config_path, local):
+    def __init__(self, config, config_path, local, *, store=None):
         self.local = local
         self.limits = LandscapeLimits(**{key: config[key] for key in LandscapeLimits.model_fields if key in config})
         self.preload = LandscapePreload(**{key: config[key] for key in LandscapePreload.model_fields if key in config})
@@ -97,7 +97,7 @@ class ExpandingScenarios:
         self.preloaded_regions = {}
         parent = Path(config_path).resolve().parent
         archive = parent/config['road_archive'] if config.get('road_archive') else None
-        self.store = LandscapeTiles(parent/config['source_config'], parent/config['data_root'], config['release'],
+        self.store = store or LandscapeTiles(parent/config['source_config'], parent/config['data_root'], config['release'],
             road_archive=archive, road_archive_sha256=config.get('road_archive_sha256'),
             raster_cache=parent/config['raster_cache'] if config.get('raster_cache') else None,
             max_cached_tiles=max(48, self.limits.max_tiles))
@@ -216,6 +216,8 @@ class ExpandingScenarios:
             samplers[key] = self.store.load(key)
 
     def initialize(self, coordinates, origin, *, satellite=False, weather_ml=False, historical=False):
+        if hasattr(self.store, 'region_for'):
+            self.store.region_for(coordinates)
         if satellite and not coordinates:
             raise ValueError('No eligible FIRMS fire cells were found in this area. Try another map area or date; starting observations must be 3–24 hours old.')
         if not 1 <= len(coordinates) <= 500:
@@ -275,6 +277,8 @@ class ExpandingScenarios:
                 key = tile_key(*model.center_xy[i])
                 for dx, dy in ((-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)):
                     other = (key[0]+dx,key[1]+dy)
+                    if hasattr(self.store, 'supports') and not self.store.supports(other):
+                        continue
                     if other not in samplers and other not in keys and g.distance(box(*tile_bounds(other))) <= reach + 1e-6:
                         keys.add(other)
             if not keys:
@@ -295,6 +299,10 @@ class ExpandingScenarios:
         result.update(expanding=True, finished=False, boundary_reached=False,
             coverage={'type': 'Feature', 'geometry': mapping(transform(model.sampler.to_geo.transform, model.sampler.bounds)),
                       'properties': {'tiles': len(samplers)}})
+        if hasattr(self.store, 'region_for'):
+            result['region_id'] = self.store.region_for(coordinates)
+            result['boundary_reached'] = frame['boundary_reached']
+            result['finished'] = frame['boundary_reached']
         if snapshot and snapshot.document['mode'] == 'historical':
             result['finished'] = simulation_time(origin, step+1) > snapshot.end
         result['metadata'].update(tile_count=len(samplers), limits=self.configuration(), coverage_mode='expands from offline road archive and retained NALCMS; no road network requests',

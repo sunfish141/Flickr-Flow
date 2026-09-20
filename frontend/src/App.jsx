@@ -53,7 +53,7 @@ export default function App() {
     if (!regions) return;
     setReferenceLayers([]);
     const controller = new AbortController();
-    for (const region of regions) fetch(`/api/local/regions/${encodeURIComponent(region.id)}/layers`, { signal: controller.signal })
+    for (const region of regions.filter(region => !region.tiled)) fetch(`/api/local/regions/${encodeURIComponent(region.id)}/layers`, { signal: controller.signal })
       .then(async response => { if (!response.ok) throw new Error(`Map detail unavailable for ${shortRegionName(region)}.`); return response.json(); })
       .then(pack => setReferenceLayers(previous => [...previous, pack]))
       .catch(error => { if (error.name !== 'AbortError') sim.message(error.message, true); });
@@ -124,7 +124,8 @@ export default function App() {
       east: Math.min(east, view.getEast()), north: Math.min(north, view.getNorth()),
     };
     sim.message(sim.expanding ? 'Loading satellite observations and preparing local fuel and road tiles. First use may take several minutes…' : historicalMode ? `Loading retained FIRMS for ${historicalDate}…` : 'Loading current observations from three VIIRS satellites…');
-    const regional = !!regionForView(regions || [], bounds);
+    const viewRegion = regionForView(regions || [], bounds);
+    const regional = viewRegion?.tiled ? 'landscape' : !!viewRegion;
     if (!regional && !onlineAllowed) { sim.message('You are offline. Zoom to an installed region to use retained local data.', true); return; }
     await sim.loadFirms(bounds, historicalMode ? historicalDate : null, regional);
   }
@@ -198,7 +199,8 @@ export default function App() {
         <div className="scenario-detail"><span>Simulation detail</span><strong id="simulation-detail">{frame ? frame.local ? `${config?.local_spread?.mesh_m} m fuel patches` : '1 km research grid' : 'Automatic by location'}</strong></div>
         {frame && !frame.local && <p id="coarse-limitations" className="hint">Grid-cell footprints, not fine-scale fire perimeters. No local fuel/road barriers or live weather.{frame.terrain_missing_count > 0 && <> Terrain missing for {frame.terrain_missing_count} evaluated cells; trained missing-input handling is used.</>}</p>}
         {frame?.local && <p className="hint">{(frame.active_area_m2 / 10000).toFixed(1)} active ha · {(frame.burned_area_m2 / 10000).toFixed(1)} burned ha. Counts summarize 1 km cells; a cell may contain both active and burned patches.</p>}
-        {frame?.boundary_reached && <p id="boundary-warning" className="hint" role="status">Pack boundary reached. Spread beyond installed coverage is not modeled.</p>}
+        {frame?.boundary_reached && <p id="boundary-warning" className="hint" role="status">Installed coverage boundary reached. Spread beyond it is not modeled.</p>}
+        {selectedRegion?.tiled && <p id="regional-limitations" className="hint">Full {selectedRegion.label} data installed · 30 m land cover; {config?.local_spread?.mesh_m} m simulation mesh. Local runs load small tiles as needed, up to {config?.local_spread?.limits?.max_area_km2} km² and {config?.local_spread?.limits?.max_patches?.toLocaleString()} fuel patches. Purple cover is urban/unknown, not safe.</p>}
         {frame?.metadata?.unsupported_observed_cells > 0 && <p id="unsupported-observations" className="hint">{frame.metadata.unsupported_observed_cells} observed cells excluded: no supported fuel data.</p>}
         <div className="sidebar-divider" /><h2>Map layers</h2>
         <p className="hint"><button id="view-us" className="secondary-button" onClick={() => {
@@ -238,9 +240,9 @@ export default function App() {
       <h2 id="help-title">Follow a possible fire.</h2>
       <ol><li>Place fires on the map or by coordinates, or load current FIRMS observations.</li><li>Play or advance twelve hours. Pause freezes the visible state, including during a request. Switching tabs pauses playback.</li><li>Use the timeline to revisit the latest 128 completed frames. Use the cell list to inspect every cell with a keyboard.</li></ol>
       <h3>Current simulation</h3>
-      {selectedRegion && !selectedPreset && <p>{selectedRegion.label}: fixed {selectedRegion.area_km2?.toFixed(0)} km² pack. Spread stops at the dashed boundary; the rest of the browsable map is not covered. The example coordinates provide a supported starting location.</p>}
+      {selectedRegion && !selectedPreset && <p>{selectedRegion.label}: {selectedRegion.tiled ? 'full province/state coverage, loaded as small local tiles' : `fixed ${selectedRegion.area_km2?.toFixed(0)} km² pack`}. Spread stops at the dashed coverage boundary. Water, urban mixtures and unknown cover are not supported ignition locations. The example coordinates provide a supported starting location.</p>}
       {selectedPreset && <p>{selectedPreset.label} view. Fuel and road coverage loads around each fire as it spreads.</p>}
-      {selectedRegion?.sources?.length > 0 && <p>Historical sources: {selectedRegion.sources.map(s => `${s.product} ${s.component_year || s.version || 'date unknown'}`).join(' · ')}. Not current fuel conditions. Road width unknown for {selectedRegion.unknown_width_count}/{selectedRegion.road_count}; grade unknown for {selectedRegion.unknown_grade_count}/{selectedRegion.road_count}. General ember crossing is not modeled.</p>}
+      {selectedRegion?.sources?.length > 0 && <p>Historical sources: {selectedRegion.sources.map(s => `${s.product} ${s.component_year || s.version || s.release || 'date unknown'}`).join(' · ')}. Not current fuel conditions. {selectedRegion.tiled ? 'Unknown road widths and grades are preserved in the local data.' : `Road width unknown for ${selectedRegion.unknown_width_count}/${selectedRegion.road_count}; grade unknown for ${selectedRegion.unknown_grade_count}/${selectedRegion.road_count}.`} General ember crossing is not modeled.</p>}
       {sim.localRegion && <p>Experimental {config.local_spread.mesh_m} m fuel patches with road barriers. Travel rates are uncalibrated and wind is a constant scenario assumption, not live weather. Urban mixtures and structures are unsupported. Unknown road widths use a {config.local_spread.policy.unknown_road_width_m} m assumption where surface type is mapped. Polygon ignition starts a supported fuel patch; the 1 km model's intensity slider is not used. {sim.expanding ? 'Roads are read from a local archive. Landscape tiles are built as the fire spreads; first preparation may take several minutes.' : 'Place within the selected region.'}</p>}
       <h3>Automatic simulation and offline maps</h3><p>Region buttons and map labels move the view; they do not erase a run. Ignitions inside a verified pack use its 100 m fuel-patch engine. When connected, locations outside those packs use the labelled 1 km research model on supported North American land. Its polygons are grid-cell footprints, not fine-scale fire perimeters; it has no local road barriers, measured fuel cover or live weather. Terrain is incomplete and missing inputs use the model's trained handling. Manual grid ignitions start at scenario strength 1, not a measured intensity or probability. Reset before changing engines or packs; an existing grid run can continue locally after disconnection. Offline, new ignitions outside installed packs are blocked. Internet access does not install detailed packs. Unknown and urban cover inside a pack remain unsupported, not safe.</p>
       <h3>Satellite observations</h3><p>A close-up view centred on one installed region seeds fuel patches from observed 1 km cell centres; unsupported cells are counted and excluded. Broader views use the labelled 1 km model. Historical mode, where an archive is installed, uses an ignition snapshot for fuel patches, or a daily observation comparison for the grid model. Neither reconstructs historical fuel conditions. Missing detections do not prove an absence of fire.</p>

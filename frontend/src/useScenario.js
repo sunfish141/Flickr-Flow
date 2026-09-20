@@ -112,14 +112,14 @@ export function useScenario() {
     if (scenario.ignitions.length >= 500) { message('At most 500 starting points are supported.', true); return false; }
     const ignitions = [...scenario.ignitions, { latitude, longitude, intensity }];
     return request(endpoint, { ignitions }, result => {
-      setLocalRegion(result.local ? result.state.region : '');
+      setLocalRegion(result.local ? result.region_id || result.state.region : '');
       dispatch({ type: 'replace', frame: result, ignitions, source: 'placed' });
       message(result.local ? 'Starting fuel patch added. Playback uses experimental travel rates and constant scenario wind.' : `Starting fire added using the 1 km research model. Detailed fuel/road data is not installed here.${result.terrain_missing_count ? ' Terrain is missing at this location; the model uses its trained missing-input handling.' : ''}`);
     });
   };
-  const loadFirms = (bounds, date = null, regional = true) => request(`${regional ? 'map/' : ''}firms${date ? '/historical' : ''}`, date ? { date, bounds } : bounds, result => {
+  const loadFirms = (bounds, date = null, regional = true) => request(`${regional === 'landscape' ? 'landscape/' : regional ? 'map/' : ''}firms${date ? '/historical' : ''}`, date ? { date, bounds } : bounds, result => {
     dispatch({ type: 'replace', frame: result, source: 'firms' });
-    setLocalRegion(result.local ? result.state.region : '');
+    setLocalRegion(result.local ? result.region_id || result.state.region : '');
     if (result.local) {
       message(`${date ? 'Historical ignition snapshot' : 'Satellite ignition snapshot'}: ${result.metadata.mapped_starting_cells} supported starting patches; ${result.metadata.unsupported_observed_cells} observed cells outside supported fuel. Fine ignition positions and spread are hypothetical.`);
       return;

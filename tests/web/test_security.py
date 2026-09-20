@@ -73,13 +73,15 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/step', json=body).status_code, 422)
 
     def test_busy_inference_fails_fast_and_recovers(self):
+        # Seeding also samples terrain. Install the latch afterward so only
+        # the actual in-flight step can signal that it holds the inference lock.
+        frame = self.seed()
         started, release = Event(), Event()
         def slow_terrain(cell):
             started.set()
             release.wait(10)
             return terrain(cell)
         self.app.state.runtime.terrain = slow_terrain
-        frame = self.seed()
         body = {'state': frame['state'], 'origin_at': frame['origin_at']}
         with ThreadPoolExecutor() as pool:
             first = pool.submit(self.client.post, '/api/step', json=body)
@@ -105,7 +107,7 @@ class StreamingBoundaryTests(unittest.IsolatedAsyncioTestCase):
             return next(chunks)
         async def send(message):
             output.append(message)
-        await boundary({'type': 'http', 'path': '/api/step', 'scheme': 'http', 'headers': []}, receive, send)
+        await boundary({'type': 'http', 'method': 'POST', 'path': '/api/step', 'scheme': 'http', 'headers': []}, receive, send)
         self.assertFalse(called)
         self.assertEqual(output[0]['status'], 413)
         self.assertEqual(boundary.inflight, 0)
@@ -118,7 +120,7 @@ class StreamingBoundaryTests(unittest.IsolatedAsyncioTestCase):
             output.append(message)
         boundary = RequestBoundary(unexpected)
         boundary.inflight = 8
-        await boundary({'type': 'http', 'path': '/api/step', 'scheme': 'http', 'headers': []}, unexpected, send)
+        await boundary({'type': 'http', 'method': 'POST', 'path': '/api/step', 'scheme': 'http', 'headers': []}, unexpected, send)
         self.assertEqual(output[0]['status'], 503)
 
 

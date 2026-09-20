@@ -7,7 +7,7 @@ import sys
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -85,6 +85,22 @@ def create_app(*, data_root=None, resources=None, policy=None, explorer=None):
             await stack.enter_async_context(planner.router.lifespan_context(planner))
             await stack.enter_async_context(explorer.router.lifespan_context(explorer))
             explorer.state.runtime.network_policy = policy
+            regional_root = resources / 'data/regional-inputs-v1'
+            if (regional_root / 'index.json').is_file():
+                try:
+                    from wildfire_data.providers.landscape.regional import RegionalTiles
+                    from wildfire_data.web.landscape_spread import ExpandingScenarios
+                    store = planner.state.service.store
+                    regional = RegionalTiles(regional_root, store.root / 'regional-tiles', store.admit)
+                    local = explorer.state.local_scenarios
+                    local.expanding = ExpandingScenarios({'max_tiles': 128, 'max_patches': 500000},
+                        resources / 'config/local_spread_prepared.json', local, store=regional)
+                    local.presets = regional.regions()
+                    local.default_region = next(iter(regional.entries))
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception('Full-region data failed verification')
+                    explorer.state.local_scenarios.region_errors.append('Full Alberta/Colorado data failed verification; only pilot packs are available.')
             app.state.planner, app.state.explorer = planner, explorer
             yield
 
@@ -105,6 +121,8 @@ def create_app(*, data_root=None, resources=None, policy=None, explorer=None):
                 'firms_configured': bool(runtime.settings.firms_key or runtime.firms_loader),
                 'model_ready': runtime.model_error is None,
                 'packs': planner.state.service.packs.list(),
+                'installed_regions': [{k: r[k] for k in ('id', 'label', 'area_km2')}
+                    for r in explorer.state.local_scenarios.configuration()['regions']],
                 'pack_errors': planner.state.service.packs.errors}
 
     @app.post('/api/desktop/connectivity')
@@ -130,6 +148,17 @@ def create_app(*, data_root=None, resources=None, policy=None, explorer=None):
     @app.get('/explore/')
     def explore():
         return FileResponse(WEB_STATIC / 'index.html')
+
+    @app.get('/api/regional/{identity}/tiles/{z}/{x}/{y}.png')
+    def regional_tile(identity: str, z: int, x: int, y: int):
+        local = explorer.state.local_scenarios
+        if not local.expanding or not hasattr(local.expanding.store, 'map_tile'):
+            raise HTTPException(404, 'Full-region offline maps are not installed')
+        try:
+            content = local.expanding.store.map_tile(identity, z, x, y)
+            return Response(content, media_type='image/png', headers={'Cache-Control': 'private, max-age=3600'})
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
 
     app.mount('/desktop-static', StaticFiles(directory=STATIC), name='desktop-static')
     app.mount('/planning', planner)

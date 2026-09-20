@@ -49,13 +49,16 @@ def main():
     watcher = threading.Thread(target=monitor, daemon=True)
     watcher.start()
     with tempfile.TemporaryDirectory(prefix='Wildfire Desktop ü ') as data:
+        # A frozen app must find its own packs, not accidentally fall back to
+        # relative files in the development checkout.
+        working_directory = Path(data) if args.frozen else ROOT
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
         base = f'http://127.0.0.1:{port}'
         command = [*entry, '--no-ui', '--port', str(port), '--data-dir', data]
         def launch(log):
-            process = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
+            process = subprocess.Popen(command, cwd=working_directory, env=environment, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
             roots.append(process.pid)
             return process
         def ready(client, process):
@@ -66,7 +69,8 @@ def main():
                     response = client.get('/api/desktop')
                     if response.status_code == 200:
                         assert response.json()['model_ready']
-                        assert len(response.json()['packs']) == 2
+                        assert {p['id'] for p in response.json()['packs']} == {'hinton-alberta', 'black-hawk-colorado'}
+                        assert not response.json()['pack_errors']
                         assert not response.json()['online_enabled']
                         return time.monotonic() - started
                 except httpx.TransportError:
@@ -87,6 +91,8 @@ def main():
                     coarse_response.raise_for_status()
                     coarse = coarse_response.json()
                     assert coarse['elapsed_hours'] == 12 and coarse['terrain_missing_count'] == 0
+                    from verify_regional_service import verify
+                    regional_report = verify(client)
                 node = shutil.which('node') or r'C:\Program Files\nodejs\node.exe'
                 browser = subprocess.Popen([node, 'tests/unified-map-browser.mjs', base, str(artifact)], cwd=ROOT / 'frontend',
                     env=environment, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
@@ -98,7 +104,10 @@ def main():
                     config = client.get('/planning/api/config').json()
                     pack = next(p for p in config['packs'] if p['id'] == 'black-hawk-colorado')
                     web = client.get('/api/config').json()
-                    region = next(p for p in web['local_spread']['regions'] if p['id'] == pack['id'])
+                    # Legacy saved cases still pin the original 81 km² pack;
+                    # it is no longer a selectable full-region Explorer entry.
+                    region = next((p for p in web['local_spread']['regions'] if p['id'] == pack['id']),
+                        {'example_ignition': {'latitude': 39.830298010446704, 'longitude': -105.54139072178096}})
                     created = client.post('/planning/api/scenarios', json={'request_id': str(uuid4()),
                         'name': 'Legacy compatibility check', 'definition': {
                             'pack_id': pack['id'], 'pack_digest': pack['digest'], 'engine_version': config['engine_version'],
@@ -147,7 +156,7 @@ def main():
                 if (Path(data) / 'desktop.log').exists(): shutil.copy2(Path(data) / 'desktop.log', artifact / 'service.log')
             native_env = dict(environment, QT_QPA_PLATFORM='offscreen', QTWEBENGINE_CHROMIUM_FLAGS='--disable-gpu')
             native_started = time.monotonic()
-            native = subprocess.Popen([*entry, '--data-dir', data, '--smoke-window', str(artifact)], cwd=ROOT,
+            native = subprocess.Popen([*entry, '--data-dir', data, '--smoke-window', str(artifact)], cwd=working_directory,
                 env=native_env, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
             roots.append(native.pid)
             try:
@@ -160,18 +169,21 @@ def main():
     browser_report = json.loads((artifact / 'report.json').read_text())
     browser_report['planner_run_seconds'] = planner_run_seconds
     from wildfire_data.planning.store import tree_bytes
-    report = {'frozen': args.frozen, 'startup_seconds': startup, 'restart_seconds': restart,
+    report = {'frozen': args.frozen, 'isolated_working_directory': args.frozen, 'startup_seconds': startup, 'restart_seconds': restart,
               # Conservative upper bound: includes first paint, a deliberate
               # 2.5-second screenshot delay, and clean shutdown, not just HTTP.
               'native_window_check_seconds': native_seconds,
               'bundle_sha256': bundle_digest(executable.parent) if args.frozen else None,
               'peak_process_tree_rss_bytes': peak[0], 'installed_bytes': tree_bytes(executable.parent) if args.frozen else None,
               'interruption_recovered': True, 'native_window': json.loads((artifact / 'native-window.json').read_text()),
+              'regional_offline': regional_report,
               'coarse_classifier_step': {'elapsed_hours': coarse['elapsed_hours'], 'terrain_missing_count': coarse['terrain_missing_count'],
                                         'new_ignition_count': coarse['new_ignition_count']},
               'browser': browser_report,
               'targets_met': {'startup_under_30s': startup < 30, 'combined_peak_under_4gb': peak[0] < 4*1024**3,
                               'native_window_check_under_30s': native_seconds < 30,
+                              'regional_24h_runs_under_120s': all(p['run_seconds_including_replay'] < 120
+                                  for p in regional_report['locations']) if regional_report['installed'] else None,
                               '24h_run_under_120s': browser_report['planner_run_seconds'] < 120}}
     (artifact / 'acceptance.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report, indent=2))

@@ -16,6 +16,11 @@ def main():
     if not report['frozen'] or not report['interruption_recovered'] or not report['native_window']['ready']:
         raise SystemExit('Complete frozen acceptance is required before packaging')
     source = ROOT / 'dist/WildfireAtlas'
+    metadata = json.loads((source / 'BUILD-INFO.json').read_text(encoding='utf-8'))
+    regional = report.get('regional_offline', {})
+    if metadata.get('full_regions') and (not regional.get('installed') or len(regional.get('locations', [])) != 4
+                                       or not regional.get('political_boundary_enforced')):
+        raise SystemExit('Full-region offline acceptance is required before packaging')
     if report.get('bundle_sha256') != bundle_digest(source):
         raise SystemExit('Distribution differs from the verified build; rerun frozen acceptance')
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
@@ -27,7 +32,9 @@ def main():
         f'- Service startup: {report["startup_seconds"]:.2f} seconds\n'
         f'- Full native-window check: {report["native_window_check_seconds"]:.2f} seconds '
         '(includes rendering, deliberate screenshot delay and shutdown)\n'
-        f'- Default 24-hour run: {report["browser"]["planner_run_seconds"]:.2f} seconds\n'
+        f'- Legacy pilot 24-hour run: {report["browser"]["planner_run_seconds"]:.2f} seconds\n'
+        f'- Full-region offline location checks: {len(regional.get("locations", []))}; '
+        '24-hour polygon runs with deterministic replay, far from the original pilot squares.\n'
         f'- Peak tested app/browser process-tree RSS: {report["peak_process_tree_rss_bytes"]:,} bytes\n'
         '- Passed automatic regional polygon routing, labelled online 1 km grid placement/playback, '
         'grid-cell polygon geometry, offline overview, missing-pack handling, automatic map '

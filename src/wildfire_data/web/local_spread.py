@@ -136,7 +136,7 @@ class LocalScenarios:
             'limits': self.expanding.configuration() if self.expanding else None,
             'preload': self.expanding.preload_status() if self.expanding else None,
             'presets': self.presets,
-            'regions': [{'id': key, 'label': label, 'bounds': s.manifest['bounds_wgs84'],
+            'regions': self.expanding.store.regions() if getattr(getattr(self.expanding, 'store', None), 'regional', False) is True else [{'id': key, 'label': label, 'bounds': s.manifest['bounds_wgs84'],
                 'road_count': len(s.roads), 'known_width_count': sum(p.get('width_m') is not None for _, p in s.roads),
                 **self.region_metadata[key]}
                 for key, (label, s) in self.regions.items()],
@@ -211,6 +211,8 @@ def register_local_routes(app):
     @app.post('/api/map/seed')
     def map_seed(body: SeedInput):
         def perform(s):
+            if s.expanding and hasattr(s.expanding.store, 'region_for'):
+                return s.expanding.initialize([(p.longitude, p.latitude) for p in body.ignitions], datetime.now(timezone.utc))
             region = s.region_for_ignitions(body.ignitions)
             model = s.model(region)
             seeds = model.seed_ids([(p.longitude, p.latitude) for p in body.ignitions])
