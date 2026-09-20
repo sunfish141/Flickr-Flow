@@ -4,11 +4,11 @@ import 'leaflet/dist/leaflet.css';
 import { selectionKey, polygonCellVisible } from './mapCells';
 import { shortRegionName } from './coverage';
 
-export default function FireMap({ region, regions, referenceLayers, frame, selectedCell, visibility, placing, basemap, mapApi, onPlace, onInspect, onRegion, onView, onConnection, onGroup, onError }) {
+export default function FireMap({ region, regions, referenceLayers, frame, selectedCell, visibility, placing, basemap, online = true, mapApi, onPlace, onInspect, onRegion, onView, onConnection, onGroup, onError }) {
   const container = useRef(null);
   const state = useRef(null);
   const latest = useRef(null);
-  latest.current = { region, regions, referenceLayers, basemap, frame, selectedCell, visibility, placing, onPlace, onInspect, onRegion, onView, onConnection, onGroup, onError };
+  latest.current = { region, regions, referenceLayers, basemap, online, frame, selectedCell, visibility, placing, onPlace, onInspect, onRegion, onView, onConnection, onGroup, onError };
   useEffect(() => {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const map = L.map(container.current, { zoomControl: false, preferCanvas: true, minZoom: 2, maxZoom: 16,
@@ -21,6 +21,8 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
     const cellRenderer = L.svg({ padding: .2 });
     map.createPane('offlineOverview'); map.getPane('offlineOverview').style.zIndex = '190';
     map.createPane('regionalMaps'); map.getPane('regionalMaps').style.zIndex = '195';
+    map.createPane('retainedMaps'); map.getPane('retainedMaps').style.zIndex = '194';
+    const retainedMaps = L.layerGroup().addTo(map), loadedTiles = new Map();
     const regionalMaps = new Map();
     const failedRegionalMaps = new Set();
     function regionalMapState() {
@@ -58,22 +60,40 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
       container.current.dataset.connection = value;
     }
     function fallback() {
-      if (disposed || !latest.current.basemap) return;
-      clearTimeout(deadline); healthy = false; tiles.remove(); report('unavailable'); draw();
+      if (disposed || !latest.current.basemap || !latest.current.online) return;
+      clearTimeout(deadline); healthy = false; retainTiles(); report('unavailable'); draw();
       if (!retryTimer) retryTimer = setTimeout(() => { retryTimer = null; if (latest.current.basemap) startTiles(); }, 30000);
     }
     function startTiles() {
       clearTimeout(deadline); clearTimeout(retryTimer); retryTimer = null;
-      report('checking'); tiles.addTo(map);
-      deadline = setTimeout(fallback, 8000);
+      if (connection !== 'unavailable') report('checking');
+      tiles.addTo(map);
+      deadline = setTimeout(fallback, 4000);
     }
+    function retainTiles() {
+      // Reuse decoded image elements, without refetching or disk caching. Keep
+      // the last view geographically anchored while offline detail loads.
+      const images = [...loadedTiles.values()].map(({ tile, coords }) => ({ tile: tile.cloneNode(), coords }));
+      tiles.remove();
+      if (!images.length) return;
+      retainedMaps.clearLayers();
+      for (const { tile, coords } of images) {
+        const size = tiles.getTileSize(), corner = L.point(coords.x * size.x, coords.y * size.y);
+        const bounds = L.latLngBounds(map.unproject(corner, coords.z), map.unproject(corner.add(size), coords.z));
+        tile.className = '';
+        L.imageOverlay(tile, bounds, { pane: 'retainedMaps', interactive: false }).addTo(retainedMaps);
+      }
+    }
+    tiles.on('tileunload', e => loadedTiles.delete(e.tile));
     tiles.on('tileerror', fallback);
-    tiles.on('tileload', () => {
-      if (!latest.current.basemap || !map.hasLayer(tiles)) return;
+    tiles.on('tileload', e => {
+      if (!latest.current.basemap || !latest.current.online || !map.hasLayer(tiles)) return;
+      loadedTiles.set(e.tile, { tile: e.tile, coords: e.coords });
       clearTimeout(deadline);
       if (!healthy) { healthy = true; draw(); }
       report('online');
     });
+    tiles.on('load', () => { if (healthy) retainedMaps.clearLayers(); });
     function draw() {
       Object.values(layers).forEach(layer => layer.clearLayers());
       const { region, frame, visibility, selectedCell } = latest.current;
@@ -146,8 +166,15 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
           });
           if (!view.intersects(cell.getBounds())) continue;
           const tooltip = document.createElement('span');
-          tooltip.textContent = '1 km² fire cell · click to inspect';
-          cell.bindTooltip(tooltip).on('click', () => latest.current.onInspect(point)).addTo(layers.cells);
+          tooltip.textContent = latest.current.placing
+            ? '1 km² fire cell · click another fuel patch to add a fire'
+            : '1 km² fire cell · click to inspect';
+          cell.bindTooltip(tooltip).on('click', e => {
+            if (latest.current.placing) {
+              const location = e.latlng.wrap();
+              latest.current.onPlace(location.lat, location.lng);
+            } else latest.current.onInspect(point);
+          }).addTo(layers.cells);
           cell.eachLayer(layer => layer.getElement()?.setAttribute('data-cell-id', point.cell_id));
           if (selectedCell === selectionKey(point, true)) {
             L.geoJSON(point.cell_geometry, { renderer: cellRenderer, interactive: false,
@@ -203,10 +230,14 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
       }
     });
     map.on('moveend', () => { draw(); const center = map.getCenter().wrap(); latest.current.onView({ longitude: center.lng, latitude: center.lat, zoom: map.getZoom() }); });
-    state.current = { map, tiles, draw, setBasemap(enabled) {
+    state.current = { map, tiles, draw, setBasemap(enabled, online) {
       clearTimeout(deadline); clearTimeout(retryTimer); retryTimer = null;
       healthy = false;
-      if (enabled) startTiles(); else { tiles.remove(); report('offline'); }
+      if (enabled && online) startTiles();
+      else {
+        if (enabled) retainTiles(); else { tiles.remove(); retainedMaps.clearLayers(); }
+        report('offline');
+      }
       draw();
     } };
     mapApi.current = {
@@ -224,11 +255,11 @@ export default function FireMap({ region, regions, referenceLayers, frame, selec
     resize.observe(container.current);
     return () => { disposed = true; controller.abort(); clearTimeout(deadline); clearTimeout(retryTimer); resize.disconnect(); map.remove(); state.current = null; mapApi.current = null; };
   }, [mapApi]);
-  useEffect(() => { state.current?.draw(); }, [region, regions, referenceLayers, frame, selectedCell, visibility]);
+  useEffect(() => { state.current?.draw(); }, [region, regions, referenceLayers, frame, selectedCell, visibility, placing]);
   useEffect(() => {
     if (!state.current) return;
-    state.current.setBasemap(basemap);
-  }, [basemap]);
+    state.current.setBasemap(basemap, online);
+  }, [basemap, online]);
   // Leaflet owns its container classes. Updating React's className after a
   // placement toggle erased leaflet-container and disabled map clipping/layout.
   useEffect(() => { container.current?.classList.toggle('placing-map', placing); }, [placing]);

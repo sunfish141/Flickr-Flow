@@ -39,10 +39,15 @@ current satellite detections are separate and require a connection.
   resolution is never silently reduced. Spread stops at installed coverage edges.
   Purple land cover is urban/unknown, not evidence of safety. First placement in
   a new location needs local tile preparation; no internet request is involved.
-- **Automatic connectivity:** the map uses online OSM tiles when they work and
-  falls back to local layers on failure, retrying after 30 seconds. Device link
-  status alone is not proof a map provider is reachable. There is no online/offline
-  switch. The optional basemap layer checkbox remains a display/privacy control.
+- **Automatic connectivity:** Windows network changes update the app directly,
+  even if the embedded browser still reports online. Connection loss pauses
+  playback, retains the scenario and last loaded map view, and shows an offline
+  notice. Press Play to explicitly continue a calculation locally. Alberta and
+  Colorado have bundled detail; retained online tiles cover only the last loaded
+  view and are not a downloaded offline map. Reconnection restores online maps
+  without resetting the scenario or resuming playback. Provider failures also
+  retain the view and retry after 30 seconds. The basemap checkbox remains a
+  display/privacy control.
 - **Satellite snapshots:** Settings accepts a session-only NASA FIRMS key. Close-up
   views centred on an installed region use fuel patches; broader views use the
   labelled 1 km model. Fine ignition positions are
@@ -53,6 +58,10 @@ current satellite detections are separate and require a connection.
 
 The current map simulation is temporary and ends on reload/shutdown. Reset before
 starting a different region; navigating elsewhere does not discard results.
+For a Wi-Fi demo, start a scenario, turn off Wi-Fi, and wait for the offline notice
+and paused playback. Press Play to demonstrate local computation. Restore Wi-Fi
+to recover online maps; playback stays under your control. Reset before placing
+a new fire in a different region.
 Derived simulation tiles are kept under the OS user-data directory, never in
 the installation folder. They share the 20 GB managed-storage admission cap
 with saved cases and the application. Nothing is automatically deleted.

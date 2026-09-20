@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
+from PySide6.QtNetwork import QNetworkInformation
 from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMessageBox
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -71,6 +72,19 @@ def run_window(base, policy, *, smoke_output=None):
     page = Page(profile, view, base, policy)
     view.setPage(page)
     window.setCentralWidget(view)
+
+    def link_changed(*_):
+        reachability = network.reachability()
+        policy.set_native_online(None if reachability == QNetworkInformation.Reachability.Unknown
+                                 else reachability == QNetworkInformation.Reachability.Online)
+        page.runJavaScript("window.dispatchEvent(new Event('wildfire:native-network'))")
+
+    network = None
+    if QNetworkInformation.loadDefaultBackend():
+        network = QNetworkInformation.instance()
+        network.reachabilityChanged.connect(link_changed)
+        link_changed()
+        page.loadFinished.connect(link_changed)
 
     def download(request):
         if not request.url().toString().startswith(base + '/planning/api/scenarios/'):

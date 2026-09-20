@@ -13,12 +13,19 @@ class NetworkPolicy:
     def __init__(self, online=True, *, forced_offline=False):
         self.forced_offline = forced_offline
         self._online = bool(online) and not forced_offline
+        self._native_online = None
         self._lock = RLock()
 
     @property
     def online(self):
         with self._lock:
-            return self._online
+            return not self.forced_offline and (self._online if self._native_online is None else self._native_online)
+
+    def set_native_online(self, enabled):
+        # Native reachability is authoritative: Chromium can keep reporting
+        # online while Windows has already lost its internet connection.
+        with self._lock:
+            self._native_online = enabled
 
     def set_online(self, enabled):
         with self._lock:

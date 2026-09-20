@@ -206,9 +206,25 @@ try {
   assert.ok(coarseStep.points.every(p => p.geometry.type === 'Polygon'));
   // Losing connectivity must not erase the acknowledged grid result.
   const initialRequests = tileRequests;
+  const retainedSources = await auto.locator('.leaflet-tile-pane img.leaflet-tile-loaded').evaluateAll(images => images.map(image => image.src));
+  assert.ok(retainedSources.length);
+  await auto.locator('#play').click();
   await auto.evaluate(() => { Object.defineProperty(navigator, 'onLine', { get: () => false, configurable: true }); window.dispatchEvent(new Event('offline')); });
   await auto.locator('#map[data-connection=offline][data-overview=ready]').waitFor();
+  await auto.locator('#connection-notice').filter({ hasText: 'playback paused' }).waitFor();
+  assert.match(await auto.locator('#play').innerText(), /Play/);
   assert.equal(await auto.locator('#elapsed').innerText(), '+12 hours');
+  const retained = await auto.locator('.leaflet-retainedMaps-pane img').evaluateAll(images => images.map(image => ({ src: image.src, loaded: image.complete && image.naturalWidth > 0 })));
+  assert.ok(retained.length && retained.every(image => image.loaded && retainedSources.includes(image.src)), 'Visible tiles must remain decoded and geographically anchored offline');
+  await auto.clock.fastForward(10000);
+  assert.equal(await auto.locator('#elapsed').innerText(), '+12 hours', 'Disconnect pauses automatic progression');
+  assert.equal(tileRequests, initialRequests, 'Retaining the view must not request more online tiles');
+  await auto.screenshot({ path: `${output}/disconnected-retained-view.png` });
+  // Continuing an existing local computation is an explicit user choice.
+  const offlineStep = auto.waitForResponse(r => r.url().endsWith('/api/step'));
+  await auto.locator('#step').click();
+  assert.equal((await offlineStep).status(), 200);
+  await auto.locator('#elapsed').filter({ hasText: '+24 hours' }).waitFor();
   await auto.locator('#reset').click();
   await auto.locator('#coordinate-place').click();
   await auto.locator('#status.error').filter({ hasText: 'not installed here' }).waitFor();
@@ -233,12 +249,44 @@ try {
   await auto.locator('#status').waitFor({ state: 'hidden' });
   assert.equal(await auto.locator('#status').innerText(), '');
   await auto.screenshot({ path: `${output}/online-missing-terrain.png` });
+  // Native Windows reachability must work while Chromium still says online.
+  const nativePage = await online.newPage();
+  nativePage.on('pageerror', e => errors.push(e.message));
+  let nativeOnline = true;
+  await nativePage.route('**/api/config', route => route.fulfill({ json: { ...config, desktop: { online_enabled: true } } }));
+  await nativePage.route('**/api/desktop**', route => route.fulfill({ json: { online_enabled: nativeOnline, firms_configured: false } }));
+  await nativePage.goto(base);
+  const nativeExplorer = nativePage.frameLocator('#explorer');
+  await nativeExplorer.locator('#map[data-connection=online]').waitFor();
+  await nativeExplorer.locator('.coordinates summary').click();
+  await nativeExplorer.locator('#latitude').fill('54');
+  await nativeExplorer.locator('#longitude').fill('-124');
+  const bcSeed = nativePage.waitForResponse(r => r.url().endsWith('/api/seed'));
+  await nativeExplorer.locator('#coordinate-place').click();
+  assert.equal((await bcSeed).status(), 200);
+  await nativeExplorer.locator('#active-count').filter({ hasText: '1' }).waitFor();
+  await nativeExplorer.locator('#play').click();
+  nativeOnline = false;
+  await nativePage.evaluate(() => window.dispatchEvent(new Event('wildfire:native-network')));
+  await nativePage.locator('#network-status').filter({ hasText: 'Offline' }).waitFor();
+  await nativeExplorer.locator('#connection-notice').filter({ hasText: 'playback paused' }).waitFor();
+  assert.equal(await nativePage.evaluate(() => navigator.onLine), true);
+  assert.equal(await nativeExplorer.locator('#elapsed').innerText(), '+0 hours');
+  assert.match(await nativeExplorer.locator('#play').innerText(), /Play/);
+  await nativeExplorer.locator('#coordinate-place').click();
+  await nativeExplorer.locator('#status.error').filter({ hasText: 'not installed here' }).waitFor();
+  nativeOnline = true;
+  await nativePage.evaluate(() => window.dispatchEvent(new Event('wildfire:native-network')));
+  await nativeExplorer.locator('#map[data-connection=online]').waitFor();
+  await nativeExplorer.locator('#connection-notice').filter({ hasText: 'Connection restored' }).waitFor();
+  assert.equal(await nativeExplorer.locator('#elapsed').innerText(), '+0 hours');
+  assert.match(await nativeExplorer.locator('#play').innerText(), /Play/, 'Reconnection must not resume playback automatically');
   await online.close();
   assert.deepEqual(errors, []);
   const report = { automatic_pack_selection: regionReports, overview: true, offline_requests: external.length,
     outside_pack_rejected_offline: true, online_grid_routing: true, grid_map_click: true,
     mixed_engines_rejected: true, missing_terrain_visible: true, routine_map_notices_removed: true, actionable_errors_visible: true, grid_polygons: true, automatic_reconnection: true,
-    saved_workspace_removed: true, polygon_inspection: true, layouts, errors };
+    saved_workspace_removed: true, polygon_inspection: true, disconnect_pauses_playback: true, retained_offline_tiles: true, explicit_offline_continuation: true, native_disconnect_with_stale_browser: true, layouts, errors };
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 } finally { await browser.close(); }

@@ -59,6 +59,26 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn('local', response.json())
         self.assertTrue(self.client.get('/api/config').json()['local_spread']['available'])
 
+    def test_multiple_starting_patches_in_one_cell_accumulate_without_double_counting(self):
+        ignitions = []
+        frames = []
+        for x, y in [(455, 455), (635, 635), (455, 455)]:
+            lon, lat = self.sampler.to_geo.transform(x, y)
+            ignitions.append({'longitude': lon, 'latitude': lat, 'intensity': 1})
+            response = self.client.post('/api/map/seed', json={'ignitions': ignitions})
+            self.assertEqual(response.status_code, 200, response.text)
+            frames.append(response.json())
+        first, combined, duplicate = frames
+        self.assertEqual(first['active_patch_count'], 1)
+        self.assertEqual(combined['active_patch_count'], 2)
+        self.assertEqual(combined['active_count'], 1)
+        self.assertEqual(first['points'][0]['cell_id'], combined['points'][0]['cell_id'])
+        self.assertAlmostEqual(combined['active_area_m2'], 2 * first['active_area_m2'])
+        self.assertAlmostEqual(combined['points'][0]['intensity'], 2 * first['points'][0]['intensity'])
+        self.assertEqual(combined['perimeters']['features'][0]['geometry']['type'], 'MultiPolygon')
+        self.assertEqual(duplicate['active_patch_count'], 2)
+        self.assertEqual(duplicate['active_area_m2'], combined['active_area_m2'])
+
     def test_polygon_cells_include_the_exact_grid_square_for_inspection(self):
         from shapely.geometry import shape, Point
         from shapely.ops import transform

@@ -14,7 +14,7 @@ function broadcast() {
 }
 function update(data) {
   status = data;
-  document.querySelector('#network-status').textContent = !data.online_enabled || !navigator.onLine
+  document.querySelector('#network-status').textContent = !data.online_enabled
     ? 'Offline · installed regions available' : mapState === 'online' ? 'Online maps · automatic'
     : mapState === 'unavailable' ? 'Offline map · reconnecting automatically' : 'Checking online maps…';
   document.querySelector('#key-status').textContent = data.firms_configured ? 'FIRMS key configured (not yet validated).' : 'No FIRMS key configured. Local simulations still work.';
@@ -32,6 +32,7 @@ window.addEventListener('message', event => {
 explorer.addEventListener('load', broadcast);
 window.addEventListener('online', linkChanged);
 window.addEventListener('offline', linkChanged);
+window.addEventListener('wildfire:native-network', () => api('').then(update).catch(e => showError(e.message)));
 const settings = document.querySelector('#settings');
 document.querySelector('#settings-open').addEventListener('click', () => settings.showModal());
 document.querySelector('#settings-close').addEventListener('click', () => settings.close());
@@ -44,4 +45,4 @@ document.querySelector('#key-form').addEventListener('submit', async event => {
 });
 linkChanged();
 // Keep separately opened views in sync with the process-wide online setting.
-setInterval(() => api('').then(update).catch(e => showError(e.message)), 5000);
+setInterval(() => api('').then(update).catch(e => showError(e.message)), 1000);

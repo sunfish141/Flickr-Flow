@@ -23,10 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--frozen', action='store_true')
+    parser.add_argument('--dist-dir', type=Path, default=ROOT / 'dist')
     args = parser.parse_args()
     artifact = ROOT / 'artifacts/desktop-smoke' / ('frozen' if args.frozen else 'source')
     artifact.mkdir(parents=True, exist_ok=True)
-    executable = ROOT / 'dist/WildfireAtlas' / ('WildfireAtlas.exe' if os.name == 'nt' else 'WildfireAtlas')
+    executable = args.dist_dir.resolve() / 'WildfireAtlas' / ('WildfireAtlas.exe' if os.name == 'nt' else 'WildfireAtlas')
     entry = [str(executable)] if args.frozen else [sys.executable, '-m', 'wildfire_data.desktop.launcher']
     environment = dict(os.environ, PYTHONPATH=str(ROOT / 'src'), NASA_FIRMS_API_KEY='', MAP_KEY='', WILDFIRE_FORCE_OFFLINE='1',
                        OMP_NUM_THREADS='2', OPENBLAS_NUM_THREADS='2')

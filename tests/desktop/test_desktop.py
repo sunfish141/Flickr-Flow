@@ -135,6 +135,22 @@ def test_desktop_settings_do_not_prepare_or_discover_external_archives(tmp_path)
     assert settings.fuel_policy == tmp_path / 'config/fuel_policy.json'
 
 
+def test_native_disconnect_overrides_stale_browser_and_recovers():
+    policy = NetworkPolicy()
+    policy.set_native_online(False)
+    policy.set_online(True)  # Chromium may still claim it has a link.
+    assert not policy.online
+    assert policy.status()['connectivity'] == 'offline'
+    policy.set_online(False)
+    policy.set_native_online(True)
+    assert policy.online  # Native reconnect need not wait for Chromium.
+    policy.set_native_online(None)
+    assert not policy.online  # Unavailable native backend uses browser state.
+    forced = NetworkPolicy(forced_offline=True)
+    forced.set_native_online(True)
+    assert not forced.online
+
+
 def test_desktop_import_does_not_load_development_dotenv():
     subprocess.run([sys.executable, '-c',
         "import dotenv\n"

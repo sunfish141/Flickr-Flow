@@ -21,6 +21,7 @@ export default function App() {
   const [view, setView] = useState({ longitude: -105, latitude: 44, zoom: 4 });
   const [connected, setConnected] = useState(navigator.onLine);
   const [mapConnection, setMapConnection] = useState('checking');
+  const [connectionInterrupted, setConnectionInterrupted] = useState(false);
   const [visibility, setVisibility] = useState({ active: true, burned: true, candidate: false, historical: true });
   const [selectedCell, setSelectedCell] = useState(null);
   const mapApi = useRef(null), help = useRef(null), inspectorHeading = useRef(null), returnFocus = useRef(null);
@@ -33,8 +34,17 @@ export default function App() {
   const selectedPreset = null;
   const selectedRegion = regions?.find(region => region.id === (sim.localRegion || focusedRegion));
   const viewRegion = installedRegionAt(regions || [], view.longitude, view.latitude);
-  const onlineAllowed = connected && (!config?.desktop || config.desktop.online_enabled);
+  const onlineAllowed = config?.desktop ? config.desktop.online_enabled : connected;
   const showBasemap = !!config && basemap && onlineAllowed;
+  const offline = !onlineAllowed || (basemap && mapConnection === 'unavailable');
+  const previousOffline = useRef(offline);
+  useEffect(() => {
+    if (offline && !previousOffline.current) {
+      sim.pause(); setPlacing(false); setConnectionInterrupted(true);
+    }
+    if (!offline && previousOffline.current && status.error && status.text.includes('You are offline')) sim.message('');
+    previousOffline.current = offline;
+  }, [offline, sim.pause, sim.message, status]);
   // Routine seed/step/reset notices duplicate the sidebar and obscure the map.
   // Keep the map live region for actionable errors only.
   const mapError = status.error ? status.text : '';
@@ -87,7 +97,7 @@ export default function App() {
   };
   const togglePlay = () => {
     if (playing || busy) sim.pause();
-    else { setPlacing(false); sim.play(); }
+    else { setConnectionInterrupted(false); setPlacing(false); sim.play(); }
   };
   useEffect(() => {
     const keydown = e => {
@@ -103,7 +113,7 @@ export default function App() {
   const add = async (lat, lon) => {
     if (!canPlace) return false;
     const region = installedRegionAt(regions || [], lon, lat);
-    const route = placementRoute({ region, frame, online: onlineAllowed, modelReady: config?.model_ready });
+    const route = placementRoute({ region, frame, online: !offline, modelReady: config?.model_ready });
     if (route.error) { sim.message(route.error, true); return false; }
     const accepted = await sim.addIgnition(lat, lon, 1, route.endpoint);
     if (accepted) setFocusedRegion(region?.id || null);
@@ -159,7 +169,7 @@ export default function App() {
         <section id="place-panel" hidden={mode !== 'place'} aria-label="Place starting fires">
 
           <button id="place" className={`primary-button ${placing ? 'placing' : ''}`} aria-pressed={placing} disabled={!canPlace} onClick={() => { sim.pause(); setPlacing(!placing); }}>{placing ? '× Finish placing' : '+ Place on map'}</button>
-          <p className="hint" id="placement-hint">{frame && (frame.state.step_index > 0 || scenario.source !== 'placed') ? 'Reset the scenario to place new fires.' : 'Click the map or enter coordinates below to add a starting fire.'}</p>
+          <p className="hint" id="placement-hint">{frame && (frame.state.step_index > 0 || scenario.source !== 'placed') ? 'Reset the scenario to place new fires.' : frame?.local ? 'While placing, click another fuel patch inside the same 1 km² cell to add a fire and increase its coverage. Finish placing to inspect cells.' : 'Choose Place on map or enter coordinates below to add a starting fire.'}</p>
           <details className="coordinates"><summary>Place by coordinates</summary>
             <form onSubmit={async e => {
               e.preventDefault(); const values = new FormData(e.currentTarget);
@@ -211,17 +221,24 @@ export default function App() {
           <label className="layer-toggle" key={key}><span><i className={`legend-dot ${key}`} aria-hidden="true" />{label}</span><input id={`show-${key === 'candidate' ? 'candidates' : key}`} type="checkbox" checked={visibility[key]} onChange={e => setVisibility(value => ({ ...value, [key]: e.target.checked }))} /></label>)}
         {daily && <label className="layer-toggle"><span><i className="legend-dot historical" aria-hidden="true" />Historical FIRMS (purple)</span><input id="show-historical" type="checkbox" checked={visibility.historical} onChange={e => setVisibility(value => ({ ...value, historical: e.target.checked }))} /></label>}
         <label className="layer-toggle"><span>OpenStreetMap basemap</span><input id="show-basemap" type="checkbox" checked={showBasemap} disabled={!onlineAllowed} onChange={e => setBasemap(e.target.checked)} /></label>
-        {(!showBasemap || mapConnection !== 'online') && <p className="hint">Offline overview · detail inside installed regions only.</p>}
+        {(!showBasemap || mapConnection !== 'online') && <p className="hint">Last loaded map tiles stay visible. New offline map detail is available in Alberta and Colorado.</p>}
         <p className="hint">The basemap sends your IP address, site origin, and viewed map tiles to OpenStreetMap. Turn it off to stop loading tiles. <a href="https://osmfoundation.org/wiki/Privacy_Policy">Provider privacy policy</a>.</p>
         <CellList points={points} onInspect={inspect} />
         <div className="sidebar-footer"><div><strong id="model-name">{frame && !frame.local ? 'Reference 1 km research model' : 'Polygon travel engine (uncalibrated)'}</strong><p>Experimental spread · <a href="/static/THIRD_PARTY_LICENSES.txt">Software notices</a></p></div></div>
       </aside>
       <section className="map-workspace" aria-label="Map and simulation playback">
-        <FireMap region={selectedRegion} regions={regions} referenceLayers={referenceLayers} frame={frame} selectedCell={selectedCell} visibility={visibility} placing={placing && canPlace} basemap={showBasemap} mapApi={mapApi} onPlace={add} onInspect={inspect} onRegion={focusRegion} onView={setView} onConnection={setMapConnection} onGroup={() => { sim.pause(); setPlacing(false); }} onError={text => sim.message(text, true)} />
+        <FireMap region={selectedRegion} regions={regions} referenceLayers={referenceLayers} frame={frame} selectedCell={selectedCell} visibility={visibility} placing={placing && canPlace} basemap={!!config && basemap} online={onlineAllowed} mapApi={mapApi} onPlace={add} onInspect={inspect} onRegion={focusRegion} onView={setView} onConnection={setMapConnection} onGroup={() => { sim.pause(); setPlacing(false); }} onError={text => sim.message(text, true)} />
         <div className="map-title"><span id="map-mode">{mapConnection === 'online' && showBasemap ? 'Online map' : 'Offline overview'}</span><strong id="map-coverage">{frame && !frame.local ? '1 km research grid · not detailed fuel spread' : viewRegion ? `${shortRegionName(viewRegion)} · installed` : view.zoom < 9 ? `${regions?.length || 0} installed regions outlined` : onlineAllowed && config?.model_ready ? '1 km exploration · no detailed pack here' : 'Regional data not installed here'}</strong></div>
         <button id="fit" className="map-button" onClick={fit}>Fit fires</button>
         <div id="map-instruction" className="map-instruction">{placing ? 'Click the map to add starting fire cells.' : frame?.local ? 'Click a 1 km square to highlight it and inspect fire and vegetation data.' : frame ? 'Inspect cells on the map or in the scenario cell list.' : 'Start with a fire or current satellite detections.'}</div>
         <div id="status" className={`status ${mapError ? 'error' : 'empty'}`} role="status" aria-live="polite" aria-atomic="true">{mapError}</div>
+        {(offline || (connectionInterrupted && frame)) && <div id="connection-notice" className="connection-notice" role="status">
+          <strong>{offline ? !onlineAllowed ? 'Offline' : 'Online maps unavailable' : 'Connection restored'}{connectionInterrupted && frame ? ' · playback paused' : ''}</strong>
+          <p>{offline ? frame && !frame.local
+            ? 'Your scenario is saved in this session. Press Play to continue the 1 km model locally; new fires outside Alberta and Colorado need internet.'
+            : 'Alberta and Colorado simulations work offline. Your current view and scenario are retained.'
+            : 'Your view and scenario are retained. Press Play when you are ready to continue.'}</p>
+        </div>}
         {selected && (selected.status === 'historical' ? <HistoricalInspector point={selected} historical={frame.historical} onClose={closeInspector} headingRef={inspectorHeading} /> : <Inspector point={selected} frame={frame} onClose={closeInspector} headingRef={inspectorHeading} />)}
         <section className="playback" aria-label="Simulation playback">
           <div className="playback-top"><div className="label-row timeline-title"><span id="timeline-heading" className="eyebrow">{first ? `RECENT TIMELINE · ${scenario.history.length} STEPS` : 'SIMULATION TIMELINE'}</span><strong id="valid-time" role="status">{frame ? `${new Date(frame.valid_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC · +${frame.elapsed_hours} h` : 'Place a fire to begin'}</strong></div><button id="reset" className="reset-button" disabled={!frame && !busy} onClick={() => { sim.reset(); setPlacing(false); setSelectedCell(null); }}>↺ Reset scenario</button></div>

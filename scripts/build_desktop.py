@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pilot-only', action='store_true', help='Explicit development fallback; not full Alberta/Colorado coverage')
+    parser.add_argument('--dist-dir', type=Path, default=ROOT / 'dist', help='Build beside a running desktop app without replacing it')
     args = parser.parse_args()
     subprocess.run([sys.executable, str(ROOT / 'scripts/build_offline_overview.py')], cwd=ROOT, check=True)
     from wildfire_data.planning.packs import Packs
@@ -79,7 +80,7 @@ def main():
         artifact, _ = public_artifact(manifest, name)
         assets.append((artifact, 'desktop_resources/artifacts/public-csv'))
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--onedir', '--windowed', '--name', 'WildfireAtlas',
-        '--paths', str(ROOT / 'src'), '--distpath', str(ROOT / 'dist'), '--workpath', str(ROOT / 'build/desktop'),
+        '--paths', str(ROOT / 'src'), '--distpath', str(args.dist_dir.resolve()), '--workpath', str(ROOT / 'build/desktop'),
         '--specpath', str(ROOT / 'build'), '--collect-data', 'pyproj', '--collect-data', 'certifi',
         '--collect-data', 'rasterio', '--collect-submodules', 'rasterio',
         '--copy-metadata', 'scikit-learn', '--copy-metadata', 'shapely',
@@ -97,7 +98,7 @@ def main():
     for source, destination in assets:
         command += ['--add-data', f'{source}{separator}{destination}']
     subprocess.run([*command, str(ROOT / 'scripts/desktop_entry.py')], cwd=ROOT, check=True)
-    target = ROOT / 'dist/WildfireAtlas'
+    target = args.dist_dir.resolve() / 'WildfireAtlas'
     report = {'kind': 'unsigned-internal-full-desktop', 'platform': platform.platform(),
               'python': platform.python_version(), 'dependencies': versions, 'packs': verified.list(),
               'full_regions': [{k: r[k] for k in ('id', 'label', 'area_km2', 'digest')} for r in regional_metadata],
